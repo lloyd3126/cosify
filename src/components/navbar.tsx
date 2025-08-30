@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Me = {
     id: string;
@@ -78,27 +86,34 @@ export function Navbar() {
                         {loading ? (
                             <div className="h-8 w-24 rounded bg-muted/50 animate-pulse" />
                         ) : me ? (
-                            <>
-                                <div className="flex items-center gap-2">
-                                    <Avatar>
-                                        <AvatarImage src={me.image ?? undefined} alt={me.name ?? me.email ?? "user"} />
-                                        <AvatarFallback>
-                                            {(me.name || me.email || "?").slice(0, 2).toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="text-sm text-muted-foreground">
-                                        <div className="font-medium not-italic text-foreground truncate max-w-[160px]">
-                                            {me.name || me.email || "使用者"}
-                                        </div>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="rounded-full focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+                                        aria-label="使用者選單"
+                                    >
+                                        <Avatar>
+                                            <AvatarImage src={me.image ?? undefined} alt={me.name ?? me.email ?? "user"} />
+                                            <AvatarFallback>
+                                                {(me.name || me.email || "?").slice(0, 2).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-64">
+                                    <DropdownMenuLabel>
+                                        <div className="truncate">{me.name || me.email || "使用者"}</div>
                                         {me.email && (
-                                            <div className="truncate max-w-[160px]">{me.email}</div>
+                                            <div className="text-muted-foreground font-normal truncate">{me.email}</div>
                                         )}
-                                    </div>
-                                </div>
-                                <Button variant="ghost" onClick={signOut}>
-                                    登出
-                                </Button>
-                            </>
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={signOut}>
+                                        登出
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         ) : (
                             <Button variant="outline" onClick={signInWithGoogle}>
                                 使用 Google 登入
