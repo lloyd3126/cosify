@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { twoStageGenerate } from "@/server/generate";
+import { auth } from "@/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const form = await req.formData();
     const self = form.get("self");
     const character = form.get("character");
@@ -21,8 +24,7 @@ export async function POST(req: NextRequest) {
         character.arrayBuffer().then((b) => Buffer.from(b)),
     ]);
 
-    // TODO: 之後導入 session 檢查，取得 userId
-    const userId = "anonymous";
+    const userId = session.user.id;
 
     try {
         const { finalKey } = await twoStageGenerate({
