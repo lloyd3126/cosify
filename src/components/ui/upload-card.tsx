@@ -24,7 +24,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
     const [dragOver, setDragOver] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
-    const aspect = useAdaptiveAspect();
+    const aspect = "9 / 16"; // 固定 9:16 外觀
     const [confirmOpen, setConfirmOpen] = useState(false);
 
     useEffect(() => {

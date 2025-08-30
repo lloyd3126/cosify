@@ -17,10 +17,15 @@ export type GenerateResult = {
     stage3Key?: string; // stage3
 };
 
-export async function twoStageGenerate(params: GenerateParams): Promise<GenerateResult> {
-    const { userImage, characterImage } = params;
+// 公用解析函數
+type InlinePart = { inlineData?: { data?: string } };
+type TextPart = { text?: string };
+function isInline(p: InlinePart | TextPart): p is Required<InlinePart> {
+    return typeof (p as InlinePart).inlineData?.data === "string";
+}
 
-    // 1) 角色 → cosplayer 中間圖
+// 單步：角色 → cosplayer 參考照（Stage1）
+export async function generateCosplayer(characterImage: Buffer): Promise<Buffer> {
     const stage1 = await ai.models.generateContent({
         model: IMAGE_MODEL,
         config: TEMPERATURES.toCosplayer !== undefined ? { temperature: TEMPERATURES.toCosplayer } : undefined,
@@ -29,83 +34,92 @@ export async function twoStageGenerate(params: GenerateParams): Promise<Generate
             { inlineData: { data: characterImage.toString("base64"), mimeType: "image/png" } },
         ],
     });
+    const parts = (stage1.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
+    const inline = parts.find(isInline);
+    const base64 = inline?.inlineData?.data as string | undefined;
+    if (!base64) throw new Error("Stage1 image not generated");
+    return Buffer.from(base64, "base64");
+}
 
-    type InlinePart = { inlineData?: { data?: string } };
-    type TextPart = { text?: string };
-    function isInline(p: InlinePart | TextPart): p is Required<InlinePart> {
-        return typeof (p as InlinePart).inlineData?.data === "string";
-    }
-
-    const stage1Parts = (stage1.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
-    const stage1Inline = stage1Parts.find(isInline);
-    const stage1ImageBase64 = stage1Inline?.inlineData?.data as
-        | string
-        | undefined;
-    if (!stage1ImageBase64) throw new Error("Stage1 image not generated");
-    const stage1Buf = Buffer.from(stage1ImageBase64, "base64");
-
-    // 上傳中間圖到 R2 (stage1)
-    const intermediateKey = `intermediate/${randomUUID()}.png`;
-    await r2Put(intermediateKey, stage1Buf, "image/png");
-
-    // 2) cosplayer → flat lay outfit（僅輸出服裝平鋪圖）
+// 單步：cosplayer → 服裝平鋪（Stage2）
+export async function generateOutfit(cosplayerImage: Buffer): Promise<Buffer> {
     const stage2 = await ai.models.generateContent({
         model: IMAGE_MODEL,
         config: TEMPERATURES.toCosplayerOutfit !== undefined ? { temperature: TEMPERATURES.toCosplayerOutfit } : undefined,
         contents: [
             TO_COSPLAYER_OUTFIT_PROMPT,
-            { inlineData: { data: stage1Buf.toString("base64"), mimeType: "image/png" } },
+            { inlineData: { data: cosplayerImage.toString("base64"), mimeType: "image/png" } },
         ],
     });
+    const parts = (stage2.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
+    const inline = parts.find(isInline);
+    const base64 = inline?.inlineData?.data as string | undefined;
+    if (!base64) throw new Error("Stage2 outfit image not generated");
+    return Buffer.from(base64, "base64");
+}
 
-    const stage2Parts = (stage2.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
-    const stage2Inline = stage2Parts.find(isInline);
-    const stage2ImageBase64 = stage2Inline?.inlineData?.data as string | undefined;
-    if (!stage2ImageBase64) throw new Error("Stage2 outfit image not generated");
-    const stage2Buf = Buffer.from(stage2ImageBase64, "base64");
-
-    // 上傳服裝平鋪圖到 R2 (stage2)
-    const outfitKey = `outfit/${randomUUID()}.png`;
-    await r2Put(outfitKey, stage2Buf, "image/png");
-
-    // 3) Outfit + 使用者 → 最終（將平鋪服裝穿到使用者身上）
+// 單步：使用者 + 平鋪服 → 上身照（Stage3）
+export async function generateUserCosplay(userImage: Buffer, outfitImage: Buffer): Promise<Buffer> {
     const stage3 = await ai.models.generateContent({
         model: IMAGE_MODEL,
         config: TEMPERATURES.toUserCosplay !== undefined ? { temperature: TEMPERATURES.toUserCosplay } : undefined,
         contents: [
             TO_USER_COSPLAY_PROMPT,
             { inlineData: { data: userImage.toString("base64"), mimeType: "image/png" } },
-            { inlineData: { data: stage2Buf.toString("base64"), mimeType: "image/png" } },
+            { inlineData: { data: outfitImage.toString("base64"), mimeType: "image/png" } },
         ],
     });
+    const parts = (stage3.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
+    const inline = parts.find(isInline);
+    const base64 = inline?.inlineData?.data as string | undefined;
+    if (!base64) throw new Error("Stage3 image not generated");
+    return Buffer.from(base64, "base64");
+}
 
-    const stage3Parts = (stage3.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
-    const stage3Inline = stage3Parts.find(isInline);
-    const stage3ImageBase64 = stage3Inline?.inlineData?.data as string | undefined;
-    if (!stage3ImageBase64) throw new Error("Stage3 image not generated");
-    const stage3Buf = Buffer.from(stage3ImageBase64, "base64");
+// 單步：髮型替換（Stage4）
+export async function generateHairSwap(baseImage: Buffer, characterImage: Buffer): Promise<Buffer> {
+    const stage4 = await ai.models.generateContent({
+        model: IMAGE_MODEL,
+        config: TEMPERATURES.toUserCosplay !== undefined ? { temperature: TEMPERATURES.toUserCosplay } : undefined,
+        contents: [
+            TO_HAIR_SWAP_PROMPT,
+            { inlineData: { data: baseImage.toString("base64"), mimeType: "image/png" } },
+            { inlineData: { data: characterImage.toString("base64"), mimeType: "image/png" } },
+        ],
+    });
+    const parts = (stage4.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
+    const inline = parts.find(isInline);
+    const base64 = inline?.inlineData?.data as string | undefined;
+    if (!base64) throw new Error("Stage4 image not generated");
+    return Buffer.from(base64, "base64");
+}
+
+export async function twoStageGenerate(params: GenerateParams): Promise<GenerateResult> {
+    const { userImage, characterImage } = params;
+
+    // 1) 角色 → cosplayer 中間圖
+    const stage1Buf = await generateCosplayer(characterImage);
+
+    // 上傳中間圖到 R2 (stage1)
+    const intermediateKey = `intermediate/${randomUUID()}.png`;
+    await r2Put(intermediateKey, stage1Buf, "image/png");
+
+    // 2) cosplayer → flat lay outfit（僅輸出服裝平鋪圖）
+    const stage2Buf = await generateOutfit(stage1Buf);
+
+    // 上傳服裝平鋪圖到 R2 (stage2)
+    const outfitKey = `outfit/${randomUUID()}.png`;
+    await r2Put(outfitKey, stage2Buf, "image/png");
+
+    // 3) Outfit + 使用者 → 最終（將平鋪服裝穿到使用者身上）
+    const stage3Buf = await generateUserCosplay(userImage, stage2Buf);
 
     // 上傳第三階段結果
     const stage3Key = `final_stage3/${randomUUID()}.png`;
     await r2Put(stage3Key, stage3Buf, "image/png");
 
     // 4) 髮型替換：image1 = stage3 結果，image2 = 角色原圖
-    const stage4 = await ai.models.generateContent({
-        model: IMAGE_MODEL,
-        // 沿用使用者最終圖的溫度設定，若需獨立可日後擴充
-        config: TEMPERATURES.toUserCosplay !== undefined ? { temperature: TEMPERATURES.toUserCosplay } : undefined,
-        contents: [
-            TO_HAIR_SWAP_PROMPT,
-            { inlineData: { data: stage3Buf.toString("base64"), mimeType: "image/png" } }, // image 1
-            { inlineData: { data: characterImage.toString("base64"), mimeType: "image/png" } }, // image 2
-        ],
-    });
-
-    const stage4Parts = (stage4.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
-    const stage4Inline = stage4Parts.find(isInline);
-    const stage4ImageBase64 = stage4Inline?.inlineData?.data as string | undefined;
-    if (!stage4ImageBase64) throw new Error("Stage4 image not generated");
-    const stage4Buf = Buffer.from(stage4ImageBase64, "base64");
+    const stage4Buf = await generateHairSwap(stage3Buf, characterImage);
 
     const finalKey = `final/${randomUUID()}.png`;
     await r2Put(finalKey, stage4Buf, "image/png");
