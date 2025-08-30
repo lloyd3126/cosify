@@ -14,7 +14,14 @@ export const TO_USER_COSPLAY_PROMPT =
 
 // 新增：將 cosplayer/outfit 轉為平鋪服裝（不包含臉與身體部位）
 const DEFAULT_TO_COSPLAYER_OUTFIT_PROMPT =
-    "convert the outfit(image 1) into a flat lay outfit without any face, head, hands, legs, or human body parts visible — only the clothing and accessories neatly arranged on a clean background";
+    "convert the outfit (image 1) into a flat lay outfit without any face, head, hands, legs, or human body parts visible — only the clothing and accessories neatly arranged on a clean background";
 
 export const TO_COSPLAYER_OUTFIT_PROMPT =
     (process.env.COSIFY_PROMPT_TO_COSPLAYER_OUTFIT || "").trim() || DEFAULT_TO_COSPLAYER_OUTFIT_PROMPT;
+
+// 第四階段：髮型替換
+const DEFAULT_TO_HAIR_SWAP_PROMPT =
+    "Replace the subject's hairstyle with the hairstyle from the second image (image 2).";
+
+export const TO_HAIR_SWAP_PROMPT =
+    (process.env.COSIFY_PROMPT_TO_HAIR_SWAP || "").trim() || DEFAULT_TO_HAIR_SWAP_PROMPT;

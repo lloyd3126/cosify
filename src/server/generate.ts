@@ -1,5 +1,5 @@
 import { ai, IMAGE_MODEL } from "./genai";
-import { TO_COSPLAYER_PROMPT, TO_COSPLAYER_OUTFIT_PROMPT, TO_USER_COSPLAY_PROMPT } from "./prompts";
+import { TO_COSPLAYER_PROMPT, TO_COSPLAYER_OUTFIT_PROMPT, TO_USER_COSPLAY_PROMPT, TO_HAIR_SWAP_PROMPT } from "./prompts";
 import { TEMPERATURES } from "./config";
 import { r2Put } from "./r2";
 import { randomUUID } from "node:crypto";
@@ -14,6 +14,7 @@ export type GenerateResult = {
     finalKey: string;
     intermediateKey?: string; // stage1
     outfitKey?: string; // stage2
+    stage3Key?: string; // stage3
 };
 
 export async function twoStageGenerate(params: GenerateParams): Promise<GenerateResult> {
@@ -84,8 +85,30 @@ export async function twoStageGenerate(params: GenerateParams): Promise<Generate
     if (!stage3ImageBase64) throw new Error("Stage3 image not generated");
     const stage3Buf = Buffer.from(stage3ImageBase64, "base64");
 
-    const finalKey = `final/${randomUUID()}.png`;
-    await r2Put(finalKey, stage3Buf, "image/png");
+    // 上傳第三階段結果
+    const stage3Key = `final_stage3/${randomUUID()}.png`;
+    await r2Put(stage3Key, stage3Buf, "image/png");
 
-    return { finalKey, intermediateKey, outfitKey };
+    // 4) 髮型替換：image1 = stage3 結果，image2 = 角色原圖
+    const stage4 = await ai.models.generateContent({
+        model: IMAGE_MODEL,
+        // 沿用使用者最終圖的溫度設定，若需獨立可日後擴充
+        config: TEMPERATURES.toUserCosplay !== undefined ? { temperature: TEMPERATURES.toUserCosplay } : undefined,
+        contents: [
+            TO_HAIR_SWAP_PROMPT,
+            { inlineData: { data: stage3Buf.toString("base64"), mimeType: "image/png" } }, // image 1
+            { inlineData: { data: characterImage.toString("base64"), mimeType: "image/png" } }, // image 2
+        ],
+    });
+
+    const stage4Parts = (stage4.candidates?.[0]?.content?.parts ?? []) as Array<InlinePart | TextPart>;
+    const stage4Inline = stage4Parts.find(isInline);
+    const stage4ImageBase64 = stage4Inline?.inlineData?.data as string | undefined;
+    if (!stage4ImageBase64) throw new Error("Stage4 image not generated");
+    const stage4Buf = Buffer.from(stage4ImageBase64, "base64");
+
+    const finalKey = `final/${randomUUID()}.png`;
+    await r2Put(finalKey, stage4Buf, "image/png");
+
+    return { finalKey, intermediateKey, outfitKey, stage3Key };
 }
