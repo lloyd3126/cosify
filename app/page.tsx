@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import UploadCard from "@/components/ui/upload-card";
 import Image from "next/image";
 import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
-import { X } from "lucide-react";
+import { X, Download, WandSparkles, RotateCw } from "lucide-react";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import { Toaster, toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 
@@ -17,6 +18,7 @@ export default function Home() {
     const [, setProgress] = useState(0);
     const [resultKey, setResultKey] = useState<string | null>(null);
     const [me, setMe] = useState<Me>(null);
+    const [confirmClearResult, setConfirmClearResult] = useState(false);
     const [loadingMe, setLoadingMe] = useState(true);
 
     const resultUrl = useMemo(() => (resultKey ? `/api/r2/${resultKey}` : null), [resultKey]);
@@ -108,7 +110,7 @@ export default function Home() {
                             <div className="absolute inset-0 grid place-items-center">
                                 <div className="flex flex-col items-center gap-3">
                                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
-                                    <div className="text-sm text-muted-foreground">生成中…請稍候</div>
+                                    {/* <div className="text-sm text-muted-foreground">生成中…請稍候</div> */}
                                 </div>
                             </div>
                         ) : resultUrl ? (
@@ -117,18 +119,31 @@ export default function Home() {
                                 {/* Top-right clear button for result */}
                                 <button
                                     type="button"
-                                    onClick={onClearResult}
+                                    onClick={() => setConfirmClearResult(true)}
                                     aria-label="清除結果"
                                     className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
                                     disabled={loading}
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
+                                <ConfirmDialog
+                                    open={confirmClearResult}
+                                    title="清除這張結果？"
+                                    description="此動作無法復原。"
+                                    confirmText="清除"
+                                    cancelText="取消"
+                                    onCancel={() => setConfirmClearResult(false)}
+                                    onConfirm={() => { setConfirmClearResult(false); onClearResult(); }}
+                                />
                                 {/* Overlay controls: show on hover/focus when image exists */}
                                 <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-                                    <div className="w-full grid grid-cols-1 gap-2">
-                                        <Button className="w-full" onClick={onGenerate} disabled={!canGenerate}>生成</Button>
-                                        <Button className="w-full" onClick={onDownload} disabled={!resultUrl || loading}>下載</Button>
+                                    <div className="w-full grid grid-cols-2 gap-2">
+                                        <Button className="w-full" onClick={onGenerate} disabled={!canGenerate} aria-label="重新生成">
+                                            <RotateCw className="h-4 w-4" />
+                                        </Button>
+                                        <Button className="w-full" onClick={onDownload} disabled={!resultUrl || loading} aria-label="下載">
+                                            <Download className="h-4 w-4" />
+                                        </Button>
                                     </div>
                                 </div>
                             </>
@@ -138,8 +153,9 @@ export default function Home() {
                                 {/* No image: buttons are directly visible inside the card */}
                                 <div className="absolute inset-x-0 bottom-0 p-3">
                                     <div className="w-full grid grid-cols-1 gap-2">
-                                        <Button className="w-full" onClick={onGenerate} disabled={!canGenerate}>生成</Button>
-                                        <Button className="w-full" onClick={onDownload} disabled={!resultUrl || loading}>下載</Button>
+                                        <Button className="w-full" onClick={onGenerate} disabled={!canGenerate} aria-label="生成">
+                                            <WandSparkles className="h-4 w-4" />
+                                        </Button>
                                     </div>
                                 </div>
                             </>

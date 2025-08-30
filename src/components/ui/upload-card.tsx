@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import clsx from "clsx";
 import { preprocessImage } from "@/lib/image-preprocess";
-import { X } from "lucide-react";
+import { X, Upload } from "lucide-react";
 import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 
 export type UploadCardProps = {
     label: string;
@@ -24,6 +25,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
     const [error, setError] = useState<string | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const aspect = useAdaptiveAspect();
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     useEffect(() => {
         if (!file) {
@@ -86,7 +88,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                         {/* Top-right clear button (show on hover/focus/drag) */}
                         <button
                             type="button"
-                            onClick={() => onChange(null)}
+                            onClick={() => setConfirmOpen(true)}
                             aria-label="清除圖片"
                             className={clsx(
                                 "absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none",
@@ -98,6 +100,15 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                         >
                             <X className="h-4 w-4" />
                         </button>
+                        <ConfirmDialog
+                            open={confirmOpen}
+                            title="清除這張圖片？"
+                            description="此動作無法復原。"
+                            confirmText="清除"
+                            cancelText="取消"
+                            onCancel={() => setConfirmOpen(false)}
+                            onConfirm={() => { setConfirmOpen(false); onChange(null); }}
+                        />
                         {/* Floating action overlay (only when image exists) */}
                         <div
                             className={clsx(
@@ -110,7 +121,9 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                         >
                             <div className="w-full">
                                 <div className="grid grid-cols-1 gap-2">
-                                    <Button className="w-full" onClick={pick}>選擇檔案</Button>
+                                    <Button className="w-full" onClick={pick} aria-label="選擇檔案">
+                                        <Upload className="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </div>
                         </div>
