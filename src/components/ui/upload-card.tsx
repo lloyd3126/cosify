@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import clsx from "clsx";
 import { preprocessImage } from "@/lib/image-preprocess";
+import { X } from "lucide-react";
 import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
 
 export type UploadCardProps = {
@@ -82,10 +83,25 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                 {preview ? (
                     <>
                         <Image src={preview} alt={label} fill className="object-cover" />
+                        {/* Top-right clear button (show on hover/focus/drag) */}
+                        <button
+                            type="button"
+                            onClick={() => onChange(null)}
+                            aria-label="清除圖片"
+                            className={clsx(
+                                "absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none",
+                                "opacity-0 pointer-events-none",
+                                "group-hover:opacity-100 group-hover:pointer-events-auto",
+                                "group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
+                                dragOver && "opacity-100 pointer-events-auto"
+                            )}
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
                         {/* Floating action overlay (only when image exists) */}
                         <div
                             className={clsx(
-                                "absolute inset-0 flex items-end p-3 bg-black/30 transition-opacity duration-200",
+                                "absolute inset-0 z-0 flex items-end p-3 bg-black/30 transition-opacity duration-200",
                                 "opacity-0 pointer-events-none",
                                 "group-hover:opacity-100 group-hover:pointer-events-auto",
                                 "group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
@@ -95,7 +111,6 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                             <div className="w-full">
                                 <div className="grid grid-cols-1 gap-2">
                                     <Button className="w-full" onClick={pick}>選擇檔案</Button>
-                                    <Button className="w-full" onClick={() => onChange(null)} disabled={!file}>清除</Button>
                                 </div>
                             </div>
                         </div>

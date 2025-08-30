@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import UploadCard from "@/components/ui/upload-card";
 import Image from "next/image";
 import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
+import { X } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 
@@ -102,7 +103,7 @@ export default function Home() {
                 <UploadCard label="上傳扮演者的全身照" file={selfFile} onChange={setSelfFile} accept="image/*" />
                 <div className="space-y-2">
                     <div className="text-center font-medium">生成模擬扮演的成果</div>
-                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
+                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }} tabIndex={0}>
                         {loading ? (
                             <div className="absolute inset-0 grid place-items-center">
                                 <div className="flex flex-col items-center gap-3">
@@ -113,12 +114,21 @@ export default function Home() {
                         ) : resultUrl ? (
                             <>
                                 <Image src={resultUrl} alt="result" fill className="object-cover" />
+                                {/* Top-right clear button for result */}
+                                <button
+                                    type="button"
+                                    onClick={onClearResult}
+                                    aria-label="清除結果"
+                                    className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+                                    disabled={loading}
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
                                 {/* Overlay controls: show on hover/focus when image exists */}
-                                <div className="absolute inset-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+                                <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
                                     <div className="w-full grid grid-cols-1 gap-2">
                                         <Button className="w-full" onClick={onGenerate} disabled={!canGenerate}>生成</Button>
                                         <Button className="w-full" onClick={onDownload} disabled={!resultUrl || loading}>下載</Button>
-                                        <Button className="w-full" onClick={onClearResult} disabled={!resultUrl || loading}>清除</Button>
                                     </div>
                                 </div>
                             </>
@@ -130,7 +140,6 @@ export default function Home() {
                                     <div className="w-full grid grid-cols-1 gap-2">
                                         <Button className="w-full" onClick={onGenerate} disabled={!canGenerate}>生成</Button>
                                         <Button className="w-full" onClick={onDownload} disabled={!resultUrl || loading}>下載</Button>
-                                        <Button className="w-full" onClick={onClearResult} disabled={!resultUrl || loading}>清除</Button>
                                     </div>
                                 </div>
                             </>
