@@ -90,6 +90,10 @@ export default function Home() {
         }
     }
 
+    function onClearResult() {
+        setResultKey(null);
+    }
+
     return (
         <div className="mx-auto w-full max-w-6xl p-6">
             <Toaster richColors />
@@ -98,22 +102,40 @@ export default function Home() {
                 <UploadCard label="上傳扮演者的全身照" file={selfFile} onChange={setSelfFile} accept="image/*" />
                 <div className="space-y-2">
                     <div className="text-center font-medium">生成模擬扮演的成果</div>
-                    <Card className="relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20 grid place-items-center" style={{ aspectRatio: aspect }}>
+                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
                         {loading ? (
-                            <div className="flex flex-col items-center gap-3">
-                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
-                                <div className="text-sm text-muted-foreground">生成中…請稍候</div>
+                            <div className="absolute inset-0 grid place-items-center">
+                                <div className="flex flex-col items-center gap-3">
+                                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                    <div className="text-sm text-muted-foreground">生成中…請稍候</div>
+                                </div>
                             </div>
                         ) : resultUrl ? (
-                            <Image src={resultUrl} alt="result" fill className="object-cover" />
+                            <>
+                                <Image src={resultUrl} alt="result" fill className="object-cover" />
+                                {/* Overlay controls: show on hover/focus when image exists */}
+                                <div className="absolute inset-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+                                    <div className="w-full grid grid-cols-1 gap-2">
+                                        <Button className="w-full" onClick={onGenerate} disabled={!canGenerate}>生成</Button>
+                                        <Button className="w-full" onClick={onDownload} disabled={!resultUrl || loading}>下載</Button>
+                                        <Button className="w-full" onClick={onClearResult} disabled={!resultUrl || loading}>清除</Button>
+                                    </div>
+                                </div>
+                            </>
                         ) : (
-                            <div className="text-5xl text-muted-foreground"> </div>
+                            <>
+                                <div className="absolute inset-0" />
+                                {/* No image: buttons are directly visible inside the card */}
+                                <div className="absolute inset-x-0 bottom-0 p-3">
+                                    <div className="w-full grid grid-cols-1 gap-2">
+                                        <Button className="w-full" onClick={onGenerate} disabled={!canGenerate}>生成</Button>
+                                        <Button className="w-full" onClick={onDownload} disabled={!resultUrl || loading}>下載</Button>
+                                        <Button className="w-full" onClick={onClearResult} disabled={!resultUrl || loading}>清除</Button>
+                                    </div>
+                                </div>
+                            </>
                         )}
                     </Card>
-                    <div className="flex items-center gap-2">
-                        <Button className="flex-1 min-w-0" onClick={onGenerate} disabled={!canGenerate}>生成</Button>
-                        <Button className="flex-1 min-w-0" onClick={onDownload} disabled={!resultUrl || loading}>下載</Button>
-                    </div>
                 </div>
             </div>
         </div>

@@ -68,7 +68,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
             <div className="text-center font-medium">{label}</div>
             <Card
                 className={clsx(
-                    "relative w-full overflow-hidden rounded-xl border-2",
+                    "group relative w-full overflow-hidden rounded-xl border-2",
                     dragOver ? "border-primary/60 bg-muted/50" : "border-muted-foreground/20"
                 )}
                 style={{ aspectRatio: aspect }}
@@ -80,7 +80,26 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                 tabIndex={0}
             >
                 {preview ? (
-                    <Image src={preview} alt={label} fill className="object-cover" />
+                    <>
+                        <Image src={preview} alt={label} fill className="object-cover" />
+                        {/* Floating action overlay (only when image exists) */}
+                        <div
+                            className={clsx(
+                                "absolute inset-0 flex items-end p-3 bg-black/30 transition-opacity duration-200",
+                                "opacity-0 pointer-events-none",
+                                "group-hover:opacity-100 group-hover:pointer-events-auto",
+                                "group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
+                                dragOver && "opacity-100 pointer-events-auto"
+                            )}
+                        >
+                            <div className="w-full">
+                                <div className="grid grid-cols-1 gap-2">
+                                    <Button className="w-full" onClick={pick}>選擇檔案</Button>
+                                    <Button className="w-full" onClick={() => onChange(null)} disabled={!file}>清除</Button>
+                                </div>
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <button
                         type="button"
@@ -99,10 +118,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                     onChange={(e) => onFiles(e.target.files)}
                 />
             </Card>
-            <div className="flex items-center gap-2">
-                <Button className="flex-1 min-w-0" onClick={pick}>選擇檔案</Button>
-                <Button className="flex-1 min-w-0" onClick={() => onChange(null)} disabled={!file}>清除</Button>
-            </div>
+            {/* Buttons moved into overlay */}
             {error && <div className="text-sm text-red-600">{error}</div>}
         </div>
     );
