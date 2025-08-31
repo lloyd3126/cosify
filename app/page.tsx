@@ -341,25 +341,25 @@ export default function Home() {
                     <CircleChevronRight className="h-7 w-7" />
                 </button>
 
-        {/* Slides container */}
-        <div className="overflow-hidden" ref={containerRef}>
+                {/* Slides container */}
+                <div className="overflow-hidden" ref={containerRef}>
                     <div
                         ref={trackRef}
                         className="flex gap-4 transition-transform duration-300 ease-in-out"
                         style={{ transform: stepPx > 0 ? `translateX(${-cursor * stepPx}px)` : undefined }}
                     >
                         {/* Item 0: Step 1 */}
-            <div ref={item0Ref} className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                        <div ref={item0Ref} className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
                             <UploadCard label="上傳想扮演的角色照" file={characterFile} onChange={(f) => { setCharacterFile(f); if (!f) onClearStep1(); }} accept="image/*" />
                         </div>
 
                         {/* Item 1: Step 2 */}
-            <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                        <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
                             <UploadCard label="上傳扮演者的全身照" file={selfFile} onChange={(f) => { setSelfFile(f); if (!f) onClearStep2(); }} accept="image/*" />
                         </div>
 
                         {/* Item 2: Step 3 */}
-            <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                        <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
                             <div className="space-y-2">
                                 <div className="text-center font-medium">生成角色的扮演照</div>
                                 <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
