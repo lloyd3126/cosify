@@ -1,0 +1,76 @@
+{
+    "flows": {
+        "5007B1CF-7EFC-4C29-B976-080BA7D5D644": {
+            "name": "我也想當 cosplayer",
+            "slug": "cosplay-generation",
+            "steps": [
+                {
+                    "id": "2B4CB9C8-B8B3-49C6-A275-FE35E9EAFFF1",
+                    "name": "上傳想扮演的角色照",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "FFFCC480-DEA4-4701-B5BF-6DE8B8611ACD",
+                    "name": "上傳扮演者的全身照",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "E56E21E7-C318-407C-B335-25AAC7840E09",
+                    "name": "生成角色扮演照片",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate a highly detailed photo of a person cosplaying this illustration, at Comiket. Exactly replicate the same pose, body posture, hand gestures, facial expression, and camera framing as in the original illustration. Keep the same angle, perspective, and composition, without any deviation",
+                        "temperature": 0,
+                        "referenceImgs": [
+                            "2B4CB9C8-B8B3-49C6-A275-FE35E9EAFFF1"
+                        ]
+                    }
+                },
+                {
+                    "id": "210AD88A-8225-4C9A-B12B-C2342FEE9EB2",
+                    "name": "生成角色的扮演服",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "convert the outfit(image 1) into a flat lay outfit without any face, head, hands, legs, or human body parts visible — only the clothing and accessories neatly arranged on a clean background",
+                        "temperature": 0,
+                        "referenceImgs": [
+                            "E56E21E7-C318-407C-B335-25AAC7840E09"
+                        ]
+                    }
+                },
+                {
+                    "id": "E9E9D73E-8557-4656-8DBC-C5D62D52CF98",
+                    "name": "生成扮演者的角色扮演照",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "put the outfit(image 1) on user(image 2)",
+                        "temperature": 0,
+                        "referenceImgs": [
+                            "210AD88A-8225-4C9A-B12B-C2342FEE9EB2",
+                            "FFFCC480-DEA4-4701-B5BF-6DE8B8611ACD"
+                        ]
+                    }
+                },
+                {
+                    "id": "5F919C73-3616-4C32-8734-78FD5B6FBAD9",
+                    "name": "更換扮演者的髮型",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Replace the subject's hairstyle with the hairstyle from the second image (image 2).",
+                        "temperature": 0,
+                        "referenceImgs": [
+                            "2B4CB9C8-B8B3-49C6-A275-FE35E9EAFFF1",
+                            "E9E9D73E-8557-4656-8DBC-C5D62D52CF98"
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

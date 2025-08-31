@@ -113,3 +113,37 @@ export type User = typeof users.$inferSelect;
 export type Account = typeof accounts.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Verification = typeof verification.$inferSelect;
+
+// Flows 歷史：run 與 step
+export const flowRuns = sqliteTable("flow_runs", {
+    runId: text("run_id").primaryKey(),
+    userId: text("user_id").notNull(),
+    slug: text("slug").notNull(),
+    status: text("status").notNull().default("active"),
+    error: text("error"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .$onUpdate(() => new Date())
+        .notNull(),
+});
+
+export const flowRunSteps = sqliteTable("flow_run_steps", {
+    // 複合主鍵以 runId+stepId 表示一次執行的單步結果
+    runId: text("run_id").notNull(),
+    stepId: text("step_id").notNull(),
+    r2Key: text("r2_key"),
+    durationMs: integer("duration_ms"),
+    model: text("model"),
+    prompt: text("prompt"),
+    temperature: integer("temperature"),
+    error: text("error"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+});
+
+export type FlowRun = typeof flowRuns.$inferSelect;
+export type FlowRunStep = typeof flowRunSteps.$inferSelect;

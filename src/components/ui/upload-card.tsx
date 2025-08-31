@@ -6,7 +6,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import { preprocessImage } from "@/lib/image-preprocess";
 import { X, Upload } from "lucide-react";
-import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
+// import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 
 export type UploadCardProps = {

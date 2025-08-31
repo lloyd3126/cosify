@@ -1,0 +1,58 @@
+import { auth } from "@/server/auth";
+import { getFlowBySlug, validateFlow } from "@/server/flows";
+import { headers } from "next/headers";
+import Link from "next/link";
+import FlowRunner from "../../../src/components/flow-runner";
+
+export const dynamic = "force-dynamic";
+
+export default async function FlowRunnerPage({ params }: { params: Promise<{ slug: string }> }) {
+    const { slug } = await params;
+    const h = await headers();
+    const session = await auth.api.getSession({ headers: h });
+    if (!session) {
+        return (
+            <div className="min-h-dvh grid place-items-center p-6">
+                <div className="space-y-3 text-center">
+                    <h1 className="text-xl font-semibold">需要登入</h1>
+                    <p className="text-sm text-muted-foreground">請先登入後再存取此 flow。</p>
+                    <Link href="/" className="underline">返回首頁</Link>
+                </div>
+            </div>
+        );
+    }
+
+    const flow = getFlowBySlug(slug);
+    if (!flow) {
+        return (
+            <div className="min-h-dvh grid place-items-center p-6">
+                <div className="space-y-3 text-center">
+                    <h1 className="text-xl font-semibold">找不到流程</h1>
+                    <p className="text-sm text-muted-foreground">slug: {slug}</p>
+                    <Link href="/flows" className="underline">返回列表</Link>
+                </div>
+            </div>
+        );
+    }
+
+    const errors = validateFlow(flow);
+    if (errors.length > 0) {
+        return (
+            <div className="min-h-dvh grid place-items-center p-6">
+                <div className="max-w-xl w-full space-y-3">
+                    <h1 className="text-xl font-semibold">流程定義錯誤</h1>
+                    <ul className="list-disc pl-6 text-sm text-red-600">
+                        {errors.map((e, i) => (
+                            <li key={i}>{e.message}</li>
+                        ))}
+                    </ul>
+                    <Link href="/flows" className="underline">返回列表</Link>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <FlowRunner slug={slug} flow={flow} />
+    );
+}

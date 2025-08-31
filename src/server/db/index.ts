@@ -62,6 +62,29 @@ CREATE TABLE IF NOT EXISTS verification (
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS flow_runs (
+	run_id TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL,
+	slug TEXT NOT NULL,
+	status TEXT NOT NULL DEFAULT 'active',
+	error TEXT,
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS flow_run_steps (
+	run_id TEXT NOT NULL,
+	step_id TEXT NOT NULL,
+	r2_key TEXT,
+	duration_ms INTEGER,
+	model TEXT,
+	prompt TEXT,
+	temperature INTEGER,
+	error TEXT,
+	created_at INTEGER NOT NULL,
+	PRIMARY KEY (run_id, step_id)
+);
 `);
 // Backfill: add updated_at to verification if missing (older dev DBs)
 try {
