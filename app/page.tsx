@@ -7,7 +7,7 @@ import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
 import { Download, RotateCw, WandSparkles, CircleChevronLeft, CircleChevronRight, X } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import { Toaster, toast } from "sonner";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Me = { id: string; name?: string | null; email?: string | null; image?: string | null } | null;
 
@@ -18,8 +18,22 @@ export default function Home() {
     const [me, setMe] = useState<Me>(null);
     const [loadingMe, setLoadingMe] = useState(true);
 
-    // Page navigation (1..2), each page shows 3 cards
-    const [page, setPage] = useState<number>(1);
+    // Carousel cursor: shows 3 cards at once on md+, 1 card on mobile; moves 1 card per click
+    const [cursor, setCursor] = useState<number>(0); // md: 0..3 for 6 items with 3 visible
+    const [isMd, setIsMd] = useState<boolean>(false);
+    const trackRef = useRef<HTMLDivElement | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const item0Ref = useRef<HTMLDivElement | null>(null);
+    const [stepPx, setStepPx] = useState<number>(0);
+    const [itemWidth, setItemWidth] = useState<number>(0);
+
+    useEffect(() => {
+        const mq = window.matchMedia("(min-width: 768px)");
+        const onChange = () => setIsMd(mq.matches);
+        onChange();
+        mq.addEventListener?.("change", onChange);
+        return () => mq.removeEventListener?.("change", onChange);
+    }, []);
 
     // Step 1/2 uploads
     const [characterFile, setCharacterFile] = useState<File | null>(null); // Step1
@@ -79,26 +93,76 @@ export default function Home() {
     }, []);
 
     // Navigate helpers
-    const earliestIncompletePage = useCallback(() => {
-        // Page1 incomplete if any of steps 1..3 not done
-        if (!step1Done || !step2Done || !step3Done) return 1;
-        return 2;
-    }, [step1Done, step2Done, step3Done]);
+    const totalItems = 6;
+    const visibleItems = isMd ? 3 : 1;
+    const maxCursor = totalItems - visibleItems; // md:3, mobile:5
 
-    const canGoPrev = page > 1;
-    // Only allow going to page 2 when step3 is done (no skipping)
-    const canGoNext = page === 1 && step3Done;
+    const canGoPrev = cursor > 0;
+    // 放寬導航：允許自由滑動查看，但操作按鈕仍受前置條件限制（不會跳步執行）
+    const allowedMaxCursor = maxCursor;
+    const canGoNext = cursor < maxCursor;
 
-    const goPrev = () => { if (canGoPrev) setPage(1); };
-    const goNext = () => { if (canGoNext) setPage(2); };
+    const goPrev = () => { if (canGoPrev) setCursor((c) => Math.max(0, c - 1)); };
+    const goNext = () => { if (canGoNext) setCursor((c) => Math.min(allowedMaxCursor, c + 1)); };
+
+    // Measure exact item width to keep full cards visible with gaps
+    useEffect(() => {
+        const recompute = () => {
+            if (!trackRef.current || !containerRef.current) return;
+            const containerW = containerRef.current.getBoundingClientRect().width;
+            const cs = getComputedStyle(trackRef.current);
+            const gapStr = (cs as any).gap || cs.columnGap || cs.rowGap || "0";
+            const gap = parseFloat(gapStr) || 0;
+            const vis = visibleItems;
+            const w = vis > 0 ? Math.max(0, (containerW - gap * (vis - 1)) / vis) : 0;
+            setItemWidth(w);
+            setStepPx(w + gap);
+        };
+        recompute();
+        const ros: ResizeObserver[] = [];
+        if (typeof ResizeObserver !== "undefined") {
+            if (containerRef.current) {
+                const ro = new ResizeObserver(recompute);
+                ro.observe(containerRef.current);
+                ros.push(ro);
+            }
+            if (trackRef.current) {
+                const ro2 = new ResizeObserver(recompute);
+                ro2.observe(trackRef.current);
+                ros.push(ro2);
+            }
+        }
+        window.addEventListener("resize", recompute);
+        return () => {
+            window.removeEventListener("resize", recompute);
+            ros.forEach(r => r.disconnect());
+        };
+    }, [visibleItems]);
 
     // Invalidation helpers
+    function earliestIncompleteIndex() {
+        if (!step1Done) return 0;
+        if (!step2Done) return 1;
+        if (!step3Done) return 2;
+        if (!step4Done) return 3;
+        if (!step5Done) return 4;
+        if (!step6Done) return 5;
+        return 3; // all done → default near end
+    }
+
+    function clampCursorForIndex(idx: number) {
+        // Ensure target index is visible within current viewport size
+        const target = Math.min(Math.max(idx - (visibleItems - 1), 0), maxCursor);
+        return Math.min(target, allowedMaxCursor);
+    }
+
     function invalidateFrom(stepIndex: number) {
         if (stepIndex <= 3) { setStage1Key(null); setStage1Uuid(null); }
         if (stepIndex <= 4) { setStage2Key(null); setStage2Uuid(null); }
         if (stepIndex <= 5) { setStage3Key(null); setStage3Uuid(null); }
         if (stepIndex <= 6) { setStage4Key(null); setStage4Uuid(null); }
-        setPage(earliestIncompletePage());
+        const idx = earliestIncompleteIndex();
+        setCursor(clampCursorForIndex(idx));
     }
 
     // Clear handlers
@@ -108,7 +172,7 @@ export default function Home() {
         if (s === 3) { setStage1Key(null); setStage1Uuid(null); invalidateFrom(4); }
         if (s === 4) { setStage2Key(null); setStage2Uuid(null); invalidateFrom(5); }
         if (s === 5) { setStage3Key(null); setStage3Uuid(null); invalidateFrom(6); }
-        if (s === 6) { setStage4Key(null); setStage4Uuid(null); setPage(earliestIncompletePage()); }
+        if (s === 6) { setStage4Key(null); setStage4Uuid(null); const idx = earliestIncompleteIndex(); setCursor(clampCursorForIndex(idx)); }
     };
 
     // API calls
@@ -277,199 +341,202 @@ export default function Home() {
                     <CircleChevronRight className="h-7 w-7" />
                 </button>
 
-                {/* Slides container */}
-                <div className="overflow-hidden">
+        {/* Slides container */}
+        <div className="overflow-hidden" ref={containerRef}>
                     <div
-                        className="flex transition-transform duration-300 ease-in-out"
-                        style={{ transform: `translateX(-${(page - 1) * 100}%)` }}
+                        ref={trackRef}
+                        className="flex gap-4 transition-transform duration-300 ease-in-out"
+                        style={{ transform: stepPx > 0 ? `translateX(${-cursor * stepPx}px)` : undefined }}
                     >
-                        {/* Page 1: steps 1-3 */}
-                        <SlideShell>
-                            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                                {/* Step 1 */}
-                                <UploadCard label="上傳想扮演的角色照" file={characterFile} onChange={(f) => { setCharacterFile(f); if (!f) onClearStep1(); }} accept="image/*" />
+                        {/* Item 0: Step 1 */}
+            <div ref={item0Ref} className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                            <UploadCard label="上傳想扮演的角色照" file={characterFile} onChange={(f) => { setCharacterFile(f); if (!f) onClearStep1(); }} accept="image/*" />
+                        </div>
 
-                                {/* Step 2 */}
-                                <UploadCard label="上傳扮演者的全身照" file={selfFile} onChange={(f) => { setSelfFile(f); if (!f) onClearStep2(); }} accept="image/*" />
+                        {/* Item 1: Step 2 */}
+            <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                            <UploadCard label="上傳扮演者的全身照" file={selfFile} onChange={(f) => { setSelfFile(f); if (!f) onClearStep2(); }} accept="image/*" />
+                        </div>
 
-                                {/* Step 3 */}
-                                <div className="space-y-2">
-                                    <div className="text-center font-medium">生成角色的扮演照</div>
-                                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
-                                        {loading1 ? (
-                                            <div className="absolute inset-0 grid place-items-center">
-                                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
-                                            </div>
-                                        ) : stage1Url ? (
-                                            <>
-                                                <Image src={stage1Url} alt="stage1" fill className="object-cover" />
-                                                {/* Top-right clear button */}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => requestClear(3)}
-                                                    aria-label="清除結果"
-                                                    className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                                <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-                                                    <div className="w-full grid grid-cols-2 gap-2">
-                                                        <Button className="w-full" onClick={() => requestRerun(3)} aria-label="重新生成">
-                                                            <RotateCw className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button className="w-full" onClick={() => downloadByKey(stage1Key, stage1Uuid)} aria-label="下載">
-                                                            <Download className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="absolute inset-x-0 bottom-0 p-3">
-                                                <div className="w-full grid grid-cols-1 gap-2">
-                                                    <Button className="w-full" onClick={() => runStage1(false)} disabled={!me || !characterFile} aria-label="生成">
-                                                        <WandSparkles className="h-4 w-4" />
+                        {/* Item 2: Step 3 */}
+            <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                            <div className="space-y-2">
+                                <div className="text-center font-medium">生成角色的扮演照</div>
+                                <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
+                                    {loading1 ? (
+                                        <div className="absolute inset-0 grid place-items-center">
+                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                        </div>
+                                    ) : stage1Url ? (
+                                        <>
+                                            <Image src={stage1Url} alt="stage1" fill className="object-cover" />
+                                            {/* Top-right clear button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => requestClear(3)}
+                                                aria-label="清除結果"
+                                                className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                            <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+                                                <div className="w-full grid grid-cols-2 gap-2">
+                                                    <Button className="w-full" onClick={() => requestRerun(3)} aria-label="重新生成">
+                                                        <RotateCw className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button className="w-full" onClick={() => downloadByKey(stage1Key, stage1Uuid)} aria-label="下載">
+                                                        <Download className="h-4 w-4" />
                                                     </Button>
                                                 </div>
                                             </div>
-                                        )}
-                                    </Card>
-                                </div>
+                                        </>
+                                    ) : (
+                                        <div className="absolute inset-x-0 bottom-0 p-3">
+                                            <div className="w-full grid grid-cols-1 gap-2">
+                                                <Button className="w-full" onClick={() => runStage1(false)} disabled={!me || !characterFile} aria-label="生成">
+                                                    <WandSparkles className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </Card>
                             </div>
-                        </SlideShell>
+                        </div>
 
-                        {/* Page 2: steps 4-6 */}
-                        <SlideShell>
-                            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                                {/* Step 4 */}
-                                <div className="space-y-2">
-                                    <div className="text-center font-medium">生成角色的扮演服</div>
-                                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
-                                        {loading2 ? (
-                                            <div className="absolute inset-0 grid place-items-center">
-                                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
-                                            </div>
-                                        ) : stage2Url ? (
-                                            <>
-                                                <Image src={stage2Url} alt="stage2" fill className="object-cover" />
-                                                {/* Top-right clear button */}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => requestClear(4)}
-                                                    aria-label="清除結果"
-                                                    className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                                <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-                                                    <div className="w-full grid grid-cols-2 gap-2">
-                                                        <Button className="w-full" onClick={() => requestRerun(4)} aria-label="重新生成">
-                                                            <RotateCw className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button className="w-full" onClick={() => downloadByKey(stage2Key, stage2Uuid)} aria-label="下載">
-                                                            <Download className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="absolute inset-x-0 bottom-0 p-3">
-                                                <div className="w-full grid grid-cols-1 gap-2">
-                                                    <Button className="w-full" onClick={() => runStage2(false)} disabled={!me || !stage1Key} aria-label="生成">
-                                                        <WandSparkles className="h-4 w-4" />
+                        {/* Item 3: Step 4 */}
+                        <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                            <div className="space-y-2">
+                                <div className="text-center font-medium">生成角色的扮演服</div>
+                                <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
+                                    {loading2 ? (
+                                        <div className="absolute inset-0 grid place-items-center">
+                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                        </div>
+                                    ) : stage2Url ? (
+                                        <>
+                                            <Image src={stage2Url} alt="stage2" fill className="object-cover" />
+                                            {/* Top-right clear button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => requestClear(4)}
+                                                aria-label="清除結果"
+                                                className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                            <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+                                                <div className="w-full grid grid-cols-2 gap-2">
+                                                    <Button className="w-full" onClick={() => requestRerun(4)} aria-label="重新生成">
+                                                        <RotateCw className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button className="w-full" onClick={() => downloadByKey(stage2Key, stage2Uuid)} aria-label="下載">
+                                                        <Download className="h-4 w-4" />
                                                     </Button>
                                                 </div>
                                             </div>
-                                        )}
-                                    </Card>
-                                </div>
-
-                                {/* Step 5 */}
-                                <div className="space-y-2">
-                                    <div className="text-center font-medium">生成扮演者的角色扮演照</div>
-                                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
-                                        {loading3 ? (
-                                            <div className="absolute inset-0 grid place-items-center">
-                                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                        </>
+                                    ) : (
+                                        <div className="absolute inset-x-0 bottom-0 p-3">
+                                            <div className="w-full grid grid-cols-1 gap-2">
+                                                <Button className="w-full" onClick={() => runStage2(false)} disabled={!me || !stage1Key} aria-label="生成">
+                                                    <WandSparkles className="h-4 w-4" />
+                                                </Button>
                                             </div>
-                                        ) : stage3Url ? (
-                                            <>
-                                                <Image src={stage3Url} alt="stage3" fill className="object-cover" />
-                                                {/* Top-right clear button */}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => requestClear(5)}
-                                                    aria-label="清除結果"
-                                                    className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                                <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-                                                    <div className="w-full grid grid-cols-2 gap-2">
-                                                        <Button className="w-full" onClick={() => requestRerun(5)} aria-label="重新生成">
-                                                            <RotateCw className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button className="w-full" onClick={() => downloadByKey(stage3Key, stage3Uuid)} aria-label="下載">
-                                                            <Download className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="absolute inset-x-0 bottom-0 p-3">
-                                                <div className="w-full grid grid-cols-1 gap-2">
-                                                    <Button className="w-full" onClick={() => runStage3(false)} disabled={!me || !selfFile || !stage2Key} aria-label="生成">
-                                                        <WandSparkles className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </Card>
-                                </div>
-
-                                {/* Step 6 */}
-                                <div className="space-y-2">
-                                    <div className="text-center font-medium">更換扮演者的髮型</div>
-                                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
-                                        {loading4 ? (
-                                            <div className="absolute inset-0 grid place-items-center">
-                                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
-                                            </div>
-                                        ) : stage4Url ? (
-                                            <>
-                                                <Image src={stage4Url} alt="stage4" fill className="object-cover" />
-                                                {/* Top-right clear button */}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => requestClear(6)}
-                                                    aria-label="清除結果"
-                                                    className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </button>
-                                                <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-                                                    <div className="w-full grid grid-cols-2 gap-2">
-                                                        <Button className="w-full" onClick={() => requestRerun(6)} aria-label="重新生成">
-                                                            <RotateCw className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button className="w-full" onClick={() => downloadByKey(stage4Key, stage4Uuid)} aria-label="下載">
-                                                            <Download className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="absolute inset-x-0 bottom-0 p-3">
-                                                <div className="w-full grid grid-cols-1 gap-2">
-                                                    <Button className="w-full" onClick={() => runStage4(false)} disabled={!me || !stage3Key || !characterFile} aria-label="生成">
-                                                        <WandSparkles className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </Card>
-                                </div>
+                                        </div>
+                                    )}
+                                </Card>
                             </div>
-                        </SlideShell>
+                        </div>
+
+                        {/* Item 4: Step 5 */}
+                        <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                            <div className="space-y-2">
+                                <div className="text-center font-medium">生成扮演者的角色扮演照</div>
+                                <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
+                                    {loading3 ? (
+                                        <div className="absolute inset-0 grid place-items-center">
+                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                        </div>
+                                    ) : stage3Url ? (
+                                        <>
+                                            <Image src={stage3Url} alt="stage3" fill className="object-cover" />
+                                            {/* Top-right clear button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => requestClear(5)}
+                                                aria-label="清除結果"
+                                                className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                            <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+                                                <div className="w-full grid grid-cols-2 gap-2">
+                                                    <Button className="w-full" onClick={() => requestRerun(5)} aria-label="重新生成">
+                                                        <RotateCw className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button className="w-full" onClick={() => downloadByKey(stage3Key, stage3Uuid)} aria-label="下載">
+                                                        <Download className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="absolute inset-x-0 bottom-0 p-3">
+                                            <div className="w-full grid grid-cols-1 gap-2">
+                                                <Button className="w-full" onClick={() => runStage3(false)} disabled={!me || !selfFile || !stage2Key} aria-label="生成">
+                                                    <WandSparkles className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </Card>
+                            </div>
+                        </div>
+
+                        {/* Item 5: Step 6 */}
+                        <div className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
+                            <div className="space-y-2">
+                                <div className="text-center font-medium">更換扮演者的髮型</div>
+                                <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
+                                    {loading4 ? (
+                                        <div className="absolute inset-0 grid place-items-center">
+                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                        </div>
+                                    ) : stage4Url ? (
+                                        <>
+                                            <Image src={stage4Url} alt="stage4" fill className="object-cover" />
+                                            {/* Top-right clear button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => requestClear(6)}
+                                                aria-label="清除結果"
+                                                className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                            <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+                                                <div className="w-full grid grid-cols-2 gap-2">
+                                                    <Button className="w-full" onClick={() => requestRerun(6)} aria-label="重新生成">
+                                                        <RotateCw className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button className="w-full" onClick={() => downloadByKey(stage4Key, stage4Uuid)} aria-label="下載">
+                                                        <Download className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="absolute inset-x-0 bottom-0 p-3">
+                                            <div className="w-full grid grid-cols-1 gap-2">
+                                                <Button className="w-full" onClick={() => runStage4(false)} disabled={!me || !stage3Key || !characterFile} aria-label="生成">
+                                                    <WandSparkles className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </Card>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
