@@ -181,10 +181,10 @@ export default function FlowRunner({ slug, flow }: Props) {
         <div className="mx-auto w-full max-w-6xl p-6">
             <Toaster richColors />
 
-            <div className="mb-4">
-                <h1 className="text-2xl font-semibold">{flow.name}</h1>
+            <div className="mt-8 mb-12">
+                <h1 className="text-4xl font-semibold text-center tracking-wide">{flow.name}</h1>
                 {flow.metadata?.description ? (
-                    <p className="text-sm text-muted-foreground mt-1">{flow.metadata.description}</p>
+                    <p className="text-1xl text-muted-foreground mt-3 text-center tracking-widest">{flow.metadata.description}</p>
                 ) : null}
             </div>
 

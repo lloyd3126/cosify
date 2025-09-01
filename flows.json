@@ -2,7 +2,7 @@
     "flows": {
         "5007B1CF-7EFC-4C29-B976-080BA7D5D644": {
             "name": "我也想當 cosplayer",
-            "slug": "cosplay-generation",
+            "slug": "cosplay-selfie-generation-1",
             "metadata": {
                 "description": "上傳角色圖與個人照，生成最終 cosplay 照的 4 階段流程。",
                 "thumbnail": "/vercel.svg",
@@ -27,7 +27,7 @@
                     "type": "imgGenerator",
                     "data": {
                         "model": "gemini-2.5-flash-image-preview",
-                        "prompt": "Generate a highly detailed photo of a person cosplaying this illustration, at Comiket. Exactly replicate the same pose, body posture, hand gestures, facial expression, and camera framing as in the original illustration. Keep the same angle, perspective, and composition, without any deviation",
+                        "prompt": "Generate a photo of a cosplaying this illustration, with the background set at Comiket.",
                         "temperature": 1,
                         "referenceImgs": [
                             "2B4CB9C8-B8B3-49C6-A275-FE35E9EAFFF1"
@@ -54,7 +54,7 @@
                     "data": {
                         "model": "gemini-2.5-flash-image-preview",
                         "prompt": "put the outfit(image 1) on user(image 2)",
-                        "temperature": 0.5,
+                        "temperature": 1,
                         "referenceImgs": [
                             "210AD88A-8225-4C9A-B12B-C2342FEE9EB2",
                             "FFFCC480-DEA4-4701-B5BF-6DE8B8611ACD"
@@ -68,10 +68,143 @@
                     "data": {
                         "model": "gemini-2.5-flash-image-preview",
                         "prompt": "Replace the subject's hairstyle with the hairstyle from the second image (image 2).",
-                        "temperature": 0.5,
+                        "temperature": 1,
                         "referenceImgs": [
                             "2B4CB9C8-B8B3-49C6-A275-FE35E9EAFFF1",
                             "E9E9D73E-8557-4656-8DBC-C5D62D52CF98"
+                        ]
+                    }
+                }
+            ]
+        },
+        "BC2FEDD9-4DC7-47A7-9CAB-E87DE2DA9EF6": {
+            "name": "角色扮演模擬器",
+            "slug": "cosplay-selfie-generation-2",
+            "metadata": {
+                "description": "上傳角色圖與個人照後模擬該角色的扮演照",
+                "thumbnail": "/vercel.svg",
+                "visibility": "public"
+            },
+            "steps": [
+                {
+                    "id": "0FAA93FB-A5BE-40C6-AA11-E36520BEA6E3",
+                    "name": "上傳想扮演的角色照",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "AA7B8A1D-21C6-47A0-91E3-969EF7E66258",
+                    "name": "上傳扮演者的全身照",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "9F81421C-9483-4CF7-B7C3-9627C9D03324",
+                    "name": "生成扮演者的模特卡",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate the composite card of this person.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "AA7B8A1D-21C6-47A0-91E3-969EF7E66258"
+                        ]
+                    }
+                },
+                {
+                    "id": "F4E2F867-E233-400C-9ECB-DCF6DFC48F03",
+                    "name": "生成角色設定圖",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate the character design sheet.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "0FAA93FB-A5BE-40C6-AA11-E36520BEA6E3"
+                        ]
+                    }
+                },
+                {
+                    "id": "63342F47-B753-469D-AFE1-3F46D5C6424B",
+                    "name": "生成角色的扮演圖",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate a realistic photo of a cosplayer cosplaying the illustration in Comiket.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "F4E2F867-E233-400C-9ECB-DCF6DFC48F03"
+                        ]
+                    }
+                },
+                {
+                    "id": "ECD5745B-965D-498F-BC96-BBF0ABBFE6C8",
+                    "name": "生成角色的扮演服",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "convert the outfit(image 1) into a flat lay outfit without any face, head, hands, legs, or human body parts visible — only the clothing and accessories neatly arranged on a clean background.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "63342F47-B753-469D-AFE1-3F46D5C6424B"
+                        ]
+                    }
+                },
+                {
+                    "id": "3032DBB2-5FBD-4E5A-AEE7-544B31775283",
+                    "name": "生成扮演者的扮演照",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate a photorealistic image of the subject from image 3 cosplaying highly detailed as the character depicted in image 1, set against the original background from image 3.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "F4E2F867-E233-400C-9ECB-DCF6DFC48F03",
+                            "ECD5745B-965D-498F-BC96-BBF0ABBFE6C8",
+                            "AA7B8A1D-21C6-47A0-91E3-969EF7E66258"
+                        ]
+                    }
+                }
+            ]
+        },
+        "55DB89F1-A1E6-4033-BD39-1D187C82372F": {
+            "name": "生成角色扮演照",
+            "slug": "cosplay-generation",
+            "metadata": {
+                "description": "上傳角色圖後生成該角色的扮演照",
+                "thumbnail": "/vercel.svg",
+                "visibility": "public"
+            },
+            "steps": [
+                {
+                    "id": "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A",
+                    "name": "上傳想扮演的角色照",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "19695F27-8DDB-446C-895D-B11A980508BE",
+                    "name": "生成角色設定圖",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate the character design sheet.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
+                        ]
+                    }
+                },
+                {
+                    "id": "41A6794D-77C6-4579-9FFB-F9F48E017D49",
+                    "name": "生成角色的扮演圖",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate a realistic photo of a japanese cosplayer cosplaying the illustration in Comiket.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "19695F27-8DDB-446C-895D-B11A980508BE"
                         ]
                     }
                 }
