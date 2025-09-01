@@ -9,6 +9,7 @@ import { Toaster, toast } from "sonner";
 import { Download, RotateCw, X, WandSparkles } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
+import Lightbox from "@/components/ui/lightbox";
 
 type Props = { slug: string; flow: Flow };
 
@@ -17,6 +18,7 @@ export default function FlowRunner({ slug, flow }: Props) {
     const [files, setFiles] = useState<Record<string, File | null>>({});
     const [keys, setKeys] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState<Record<string, boolean>>({});
+    const [lightbox, setLightbox] = useState<{ open: boolean; src: string | null; alt: string | null }>({ open: false, src: null, alt: null });
 
     const aspect = "9 / 16";
 
@@ -210,7 +212,16 @@ export default function FlowRunner({ slug, flow }: Props) {
                             ) : (
                                 <>
                                     <div className="text-center font-medium">{step.name}</div>
-                                    <Card className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20" style={{ aspectRatio: aspect }}>
+                                    <Card
+                                        className="group relative w-full overflow-hidden rounded-xl border-2 border-muted-foreground/20"
+                                        style={{ aspectRatio: aspect }}
+                                        onClick={() => {
+                                            const key = keys[step.id];
+                                            if (step.type === "imgGenerator" && key && !loading[step.id]) {
+                                                setLightbox({ open: true, src: `/api/r2/${key}`, alt: step.name });
+                                            }
+                                        }}
+                                    >
                                         {loading[step.id] ? (
                                             <div className="absolute inset-0 grid place-items-center">
                                                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
@@ -222,7 +233,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                     {/* Top-right clear */}
                                                     <button
                                                         type="button"
-                                                        onClick={() => onRequestClear(step.id)}
+                                                        onClick={(e) => { e.stopPropagation(); onRequestClear(step.id); }}
                                                         aria-label="清除結果"
                                                         className="absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
                                                     >
@@ -231,10 +242,10 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                     {/* Bottom overlay actions */}
                                                     <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
                                                         <div className="w-full grid grid-cols-2 gap-2">
-                                                            <Button className="w-full" onClick={() => onRequestRerun(step.id)} aria-label="重新生成">
+                                                            <Button className="w-full" onClick={(e) => { e.stopPropagation(); onRequestRerun(step.id); }} aria-label="重新生成">
                                                                 <RotateCw className="h-4 w-4" />
                                                             </Button>
-                                                            <Button className="w-full" onClick={() => downloadByKey(keys[step.id] ?? null, step.id)} aria-label="下載">
+                                                            <Button className="w-full" onClick={(e) => { e.stopPropagation(); downloadByKey(keys[step.id] ?? null, step.id); }} aria-label="下載">
                                                                 <Download className="h-4 w-4" />
                                                             </Button>
                                                         </div>
@@ -280,6 +291,14 @@ export default function FlowRunner({ slug, flow }: Props) {
                 cancelText="取消"
                 onCancel={() => setConfirmClear({ stepId: null })}
                 onConfirm={onConfirmClear}
+            />
+
+            {/* Global Lightbox for imgGenerator preview */}
+            <Lightbox
+                open={lightbox.open}
+                src={lightbox.src}
+                alt={lightbox.alt ?? undefined}
+                onClose={() => setLightbox({ open: false, src: null, alt: null })}
             />
         </div>
     );

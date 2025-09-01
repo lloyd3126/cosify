@@ -8,6 +8,7 @@ import { preprocessImage } from "@/lib/image-preprocess";
 import { X, Upload } from "lucide-react";
 // import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
+import Lightbox from "@/components/ui/lightbox";
 
 export type UploadCardProps = {
     label: string;
@@ -26,6 +27,8 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
     const [preview, setPreview] = useState<string | null>(null);
     const aspect = "9 / 16"; // 固定 9:16 外觀
     const [confirmOpen, setConfirmOpen] = useState(false);
+    const [lightboxOpen, setLightboxOpen] = useState(false);
+    const closeShieldRef = useRef(false);
 
     useEffect(() => {
         if (!file) {
@@ -81,6 +84,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                 role="region"
                 aria-label={label}
                 tabIndex={0}
+                onClick={() => { if (preview && !lightboxOpen && !closeShieldRef.current) setLightboxOpen(true); }}
             >
                 {preview ? (
                     <>
@@ -88,7 +92,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                         {/* Top-right clear button (show on hover/focus/drag) */}
                         <button
                             type="button"
-                            onClick={() => setConfirmOpen(true)}
+                            onClick={(e) => { e.stopPropagation(); setConfirmOpen(true); }}
                             aria-label="清除圖片"
                             className={clsx(
                                 "absolute right-2 top-2 z-10 rounded-full bg-black/60 text-white p-1.5 shadow-sm transition-colors hover:bg-black/75 focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none",
@@ -121,12 +125,19 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                         >
                             <div className="w-full">
                                 <div className="grid grid-cols-1 gap-2">
-                                    <Button className="w-full" onClick={pick} aria-label="選擇檔案">
+                                    <Button className="w-full" onClick={(e) => { e.stopPropagation(); pick(); }} aria-label="選擇檔案">
                                         <Upload className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
                         </div>
+                        {/* Lightbox for preview */}
+                        <Lightbox
+                            open={lightboxOpen}
+                            src={preview}
+                            alt={label}
+                            onClose={() => { setLightboxOpen(false); closeShieldRef.current = true; setTimeout(() => { closeShieldRef.current = false; }, 150); }}
+                        />
                     </>
                 ) : (
                     <button

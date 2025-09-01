@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import clsx from "clsx";
 
@@ -33,9 +34,17 @@ export function ConfirmDialog({
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onCancel]);
 
+    // Optional: lock background scroll when open
+    useEffect(() => {
+        if (!open) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => { document.body.style.overflow = prev; };
+    }, [open]);
+
     if (!open) return null;
 
-    return (
+    const node = (
         <div
             role="alertdialog"
             aria-modal="true"
@@ -45,8 +54,8 @@ export function ConfirmDialog({
                 className
             )}
         >
-            <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
-            <div className="relative z-10 w-[90%] max-w-sm rounded-xl border bg-background p-4 shadow-lg">
+            <div className="absolute inset-0 bg-black/50" onClick={(e) => { onCancel(); e.stopPropagation(); }} />
+            <div className="relative z-10 w-[90%] max-w-sm rounded-xl border bg-background p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
                 <div className="space-y-2">
                     <h2 id="confirm-title" className="text-base font-semibold">
                         {title}
@@ -66,6 +75,8 @@ export function ConfirmDialog({
             </div>
         </div>
     );
+
+    return createPortal(node, document.body);
 }
 
 export default ConfirmDialog;
