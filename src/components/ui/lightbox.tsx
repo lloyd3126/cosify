@@ -13,14 +13,20 @@ type LightboxProps = {
     // Zoom bounds (optional)
     minScale?: number;
     maxScale?: number;
+    // Optional navigation
+    onPrev?: () => void;
+    onNext?: () => void;
+    canPrev?: boolean;
+    canNext?: boolean;
 };
 
-export default function Lightbox({ open, src, alt, onClose, className, minScale = 1, maxScale = 3 }: LightboxProps) {
+export default function Lightbox({ open, src, alt, onClose, className, minScale = 1, maxScale = 3, onPrev, onNext, canPrev, canNext }: LightboxProps) {
     const [scale, setScale] = useState(1);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
     const basePinch = useRef<{ distance: number; scale: number } | null>(null);
     const [mounted, setMounted] = useState(false);
+    const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -59,6 +65,9 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
         // Enable pinch on mobile (two fingers). No panning.
         (e.target as Element).setPointerCapture?.(e.pointerId);
         pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.current.size === 1) {
+            swipeStart.current = { x: e.clientX, y: e.clientY };
+        }
         if (pointers.current.size === 2) {
             const [p1, p2] = Array.from(pointers.current.values());
             basePinch.current = { distance: distance(p1, p2), scale };
@@ -85,7 +94,32 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
         if (pointers.current.size < 2) {
             basePinch.current = null;
         }
+        // Swipe detection when only one pointer was active
+        if (swipeStart.current && pointers.current.size === 0 && (onPrev || onNext)) {
+            const end = { x: e.clientX, y: e.clientY };
+            const dx = end.x - swipeStart.current.x;
+            const dy = end.y - swipeStart.current.y;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+            const threshold = 48; // px
+            if (absDx > threshold && absDy < 80) {
+                if (dx > 0 && onPrev && (canPrev ?? true)) onPrev(); // swipe right -> prev
+                else if (dx < 0 && onNext && (canNext ?? true)) onNext(); // swipe left -> next
+            }
+            swipeStart.current = null;
+        }
     };
+
+    // Keyboard arrows
+    useEffect(() => {
+        if (!open) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "ArrowLeft" && onPrev && (canPrev ?? true)) { e.preventDefault(); onPrev(); }
+            if (e.key === "ArrowRight" && onNext && (canNext ?? true)) { e.preventDefault(); onNext(); }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [open, onPrev, onNext, canPrev, canNext]);
 
     if (!open || !src || !mounted) return null;
 

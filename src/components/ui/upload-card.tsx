@@ -8,7 +8,6 @@ import { preprocessImage } from "@/lib/image-preprocess";
 import { X, Upload } from "lucide-react";
 // import useAdaptiveAspect from "@/lib/use-adaptive-aspect";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
-import Lightbox from "@/components/ui/lightbox";
 
 export type UploadCardProps = {
     label: string;
@@ -18,17 +17,17 @@ export type UploadCardProps = {
     onChange: (file: File | null) => void;
     className?: string;
     placeholder?: React.ReactNode;
+    onOpen?: () => void; // ask parent to open lightbox
 };
 
-export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChange, className, placeholder }: UploadCardProps) {
+export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChange, className, placeholder, onOpen }: UploadCardProps) {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [dragOver, setDragOver] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const aspect = "9 / 16"; // 固定 9:16 外觀
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [lightboxOpen, setLightboxOpen] = useState(false);
-    const closeShieldRef = useRef(false);
+
 
     useEffect(() => {
         if (!file) {
@@ -84,7 +83,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                 role="region"
                 aria-label={label}
                 tabIndex={0}
-                onClick={() => { if (preview && !lightboxOpen && !closeShieldRef.current) setLightboxOpen(true); }}
+                onClick={() => { if (preview) onOpen?.(); }}
             >
                 {preview ? (
                     <>
@@ -131,13 +130,7 @@ export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChang
                                 </div>
                             </div>
                         </div>
-                        {/* Lightbox for preview */}
-                        <Lightbox
-                            open={lightboxOpen}
-                            src={preview}
-                            alt={label}
-                            onClose={() => { setLightboxOpen(false); closeShieldRef.current = true; setTimeout(() => { closeShieldRef.current = false; }, 150); }}
-                        />
+                        {/* Lightbox delegated to parent */}
                     </>
                 ) : (
                     <button

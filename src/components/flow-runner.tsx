@@ -18,13 +18,50 @@ export default function FlowRunner({ slug, flow }: Props) {
     const [files, setFiles] = useState<Record<string, File | null>>({});
     const [keys, setKeys] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState<Record<string, boolean>>({});
-    const [lightbox, setLightbox] = useState<{ open: boolean; src: string | null; alt: string | null }>({ open: false, src: null, alt: null });
+    const [lightbox, setLightbox] = useState<{ open: boolean; src: string | null; alt: string | null; index: number | null }>({ open: false, src: null, alt: null, index: null });
     // Blob URL cache keyed by R2 key to avoid re-downloading images for lightbox
     const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
     const inFlight = useRef<Map<string, Promise<string>>>(new Map());
     const blobUrlsRef = useRef<Record<string, string>>({});
     useEffect(() => { blobUrlsRef.current = blobUrls; }, [blobUrls]);
     useEffect(() => () => { (Object.values(blobUrlsRef.current) as string[]).forEach((u) => { try { URL.revokeObjectURL(u); } catch { } }); }, []);
+
+    // Local uploader object URLs to include in global lightbox navigation
+    const [uploaderUrls, setUploaderUrls] = useState<Record<string, string>>({}); // stepId -> objectURL
+    const uploaderUrlsRef = useRef<Record<string, string>>({});
+    const prevFilesRef = useRef<Record<string, File | null>>({});
+    useEffect(() => { uploaderUrlsRef.current = uploaderUrls; }, [uploaderUrls]);
+    // Keep uploader object URLs in sync with files, revoke old ones
+    useEffect(() => {
+        const next: Record<string, string> = {};
+        const toRevoke: string[] = [];
+        for (const s of flow.steps) {
+            if (s.type !== "uploader") continue;
+            const f = files[s.id] ?? null;
+            const prevFile = prevFilesRef.current[s.id] ?? null;
+            const prevUrl = uploaderUrlsRef.current[s.id];
+            if (f) {
+                if (prevFile === f && prevUrl) {
+                    next[s.id] = prevUrl;
+                } else {
+                    if (prevUrl) toRevoke.push(prevUrl);
+                    try {
+                        const url = URL.createObjectURL(f);
+                        next[s.id] = url;
+                    } catch { /* no-op */ }
+                }
+            } else {
+                if (prevUrl) toRevoke.push(prevUrl);
+            }
+        }
+        prevFilesRef.current = files;
+        setUploaderUrls(next);
+        for (const url of toRevoke) {
+            try { URL.revokeObjectURL(url); } catch { }
+        }
+    }, [files, flow.steps]);
+    // Cleanup on unmount
+    useEffect(() => () => { (Object.values(uploaderUrlsRef.current) as string[]).forEach((u) => { try { URL.revokeObjectURL(u); } catch { } }); }, []);
 
     const aspect = "9 / 16";
 
@@ -252,6 +289,11 @@ export default function FlowRunner({ slug, flow }: Props) {
                                         if (f) uploadStep(step, f);
                                     }}
                                     accept="image/*"
+                                    onOpen={() => {
+                                        const idx = flow.steps.findIndex((s) => s.id === step.id);
+                                        const url = uploaderUrls[step.id];
+                                        if (url) setLightbox({ open: true, src: url, alt: step.name, index: idx });
+                                    }}
                                 />
                             ) : (
                                 <>
@@ -262,8 +304,9 @@ export default function FlowRunner({ slug, flow }: Props) {
                                         onClick={() => {
                                             const key = keys[step.id];
                                             if (step.type === "imgGenerator" && key && !loading[step.id]) {
+                                                const idx = flow.steps.findIndex((s) => s.id === step.id);
                                                 ensureBlobUrlForKey(key)
-                                                    .then((url) => setLightbox({ open: true, src: url, alt: step.name }))
+                                                    .then((url) => setLightbox({ open: true, src: url, alt: step.name, index: idx }))
                                                     .catch((e) => toast.error(e instanceof Error ? e.message : "下載失敗"));
                                             }
                                         }}
@@ -339,12 +382,76 @@ export default function FlowRunner({ slug, flow }: Props) {
                 onConfirm={onConfirmClear}
             />
 
-            {/* Global Lightbox for imgGenerator preview */}
+            {/* Global Lightbox for uploader & imgGenerator preview */}
             <Lightbox
                 open={lightbox.open}
                 src={lightbox.src}
                 alt={lightbox.alt ?? undefined}
-                onClose={() => setLightbox({ open: false, src: null, alt: null })}
+                onClose={() => setLightbox({ open: false, src: null, alt: null, index: null })}
+                onPrev={() => {
+                    if (lightbox.index == null) return;
+                    for (let i = lightbox.index - 1; i >= 0; i--) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            if (files[s.id]) {
+                                const url = uploaderUrlsRef.current[s.id];
+                                if (url) { setLightbox({ open: true, src: url, alt: s.name, index: i }); }
+                                break;
+                            }
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) {
+                                ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i }));
+                                break;
+                            }
+                        }
+                    }
+                }}
+                onNext={() => {
+                    if (lightbox.index == null) return;
+                    for (let i = lightbox.index + 1; i < flow.steps.length; i++) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            if (files[s.id]) {
+                                const url = uploaderUrlsRef.current[s.id];
+                                if (url) { setLightbox({ open: true, src: url, alt: s.name, index: i }); }
+                                break;
+                            }
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) {
+                                ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i }));
+                                break;
+                            }
+                        }
+                    }
+                }}
+                canPrev={(() => {
+                    if (lightbox.index == null) return false;
+                    for (let i = lightbox.index - 1; i >= 0; i--) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            if (files[s.id]) return true;
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
+                        }
+                    }
+                    return false;
+                })()}
+                canNext={(() => {
+                    if (lightbox.index == null) return false;
+                    for (let i = lightbox.index + 1; i < flow.steps.length; i++) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            if (files[s.id]) return true;
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
+                        }
+                    }
+                    return false;
+                })()}
             />
         </div>
     );

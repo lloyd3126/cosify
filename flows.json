@@ -183,19 +183,6 @@
                     "data": {}
                 },
                 {
-                    "id": "19695F27-8DDB-446C-895D-B11A980508BE",
-                    "name": "生成角色設定圖",
-                    "type": "imgGenerator",
-                    "data": {
-                        "model": "gemini-2.5-flash-image-preview",
-                        "prompt": "Generate the character design sheet without any background.",
-                        "temperature": 1,
-                        "referenceImgs": [
-                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
-                        ]
-                    }
-                },
-                {
                     "id": "41A6794D-77C6-4579-9FFB-F9F48E017D49",
                     "name": "生成角色的扮演圖",
                     "type": "imgGenerator",
@@ -204,7 +191,30 @@
                         "prompt": "Generate a realistic photo of a realistic cosplayer cosplaying the illustration in Comiket. The cosplayer should have a similar pose and expression as the character in the illustration of image 2.",
                         "temperature": 1,
                         "referenceImgs": [
-                            "19695F27-8DDB-446C-895D-B11A980508BE",
+                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
+                        ]
+                    }
+                }
+            ]
+        },
+        "2DF5CAFF-629D-4297-BB38-F4711A29DF39": {
+            "name": "儲存庫",
+            "slug": "Archived",
+            "metadata": {
+                "description": "Archived",
+                "thumbnail": "/vercel.svg",
+                "visibility": "public"
+            },
+            "steps": [
+                {
+                    "id": "19695F27-8DDB-446C-895D-B11A980508BE",
+                    "name": "生成角色設定圖",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate the character design sheet without any background.",
+                        "temperature": 1,
+                        "referenceImgs": [
                             "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
                         ]
                     }
