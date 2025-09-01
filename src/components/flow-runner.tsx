@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Flow, FlowStep } from "@/server/flows";
 import { Button } from "@/components/ui/button";
 import UploadCard from "@/components/ui/upload-card";
@@ -19,6 +19,12 @@ export default function FlowRunner({ slug, flow }: Props) {
     const [keys, setKeys] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState<Record<string, boolean>>({});
     const [lightbox, setLightbox] = useState<{ open: boolean; src: string | null; alt: string | null }>({ open: false, src: null, alt: null });
+    // Blob URL cache keyed by R2 key to avoid re-downloading images for lightbox
+    const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+    const inFlight = useRef<Map<string, Promise<string>>>(new Map());
+    const blobUrlsRef = useRef<Record<string, string>>({});
+    useEffect(() => { blobUrlsRef.current = blobUrls; }, [blobUrls]);
+    useEffect(() => () => { (Object.values(blobUrlsRef.current) as string[]).forEach((u) => { try { URL.revokeObjectURL(u); } catch { } }); }, []);
 
     const aspect = "9 / 16";
 
@@ -127,6 +133,17 @@ export default function FlowRunner({ slug, flow }: Props) {
     // 清除/失效處理
     function invalidateFrom(stepId: string) {
         const affected = getAllDependents(stepId);
+        // Revoke blob URLs for current keys of stepId and its dependents
+        const ids = new Set<string>([stepId, ...affected]);
+        for (const id of ids) {
+            const k = keys[id];
+            if (typeof k === "string" && k && blobUrlsRef.current[k]) {
+                const url = blobUrlsRef.current[k];
+                try { URL.revokeObjectURL(url); } catch { }
+                setBlobUrls((prev) => { const n = { ...prev }; delete n[k]; return n; });
+                inFlight.current.delete(k);
+            }
+        }
         setKeys((k) => {
             const next = { ...k };
             next[stepId] = null;
@@ -134,6 +151,33 @@ export default function FlowRunner({ slug, flow }: Props) {
             return next;
         });
     }
+
+    async function ensureBlobUrlForKey(key: string): Promise<string> {
+        if (blobUrlsRef.current[key]) return blobUrlsRef.current[key];
+        const existing = inFlight.current.get(key);
+        if (existing) return existing;
+        const p = (async () => {
+            const res = await fetch(`/api/r2/${key}`, { cache: "no-store" });
+            if (!res.ok) throw new Error("下載失敗");
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            setBlobUrls((prev) => ({ ...prev, [key]: url }));
+            return url;
+        })().finally(() => { inFlight.current.delete(key); });
+        inFlight.current.set(key, p);
+        return p;
+    }
+
+    // Prefetch blob URLs as soon as keys for imgGenerator steps become available
+    useEffect(() => {
+        for (const s of flow.steps) {
+            if (s.type !== "imgGenerator") continue;
+            const key = keys[s.id];
+            if (typeof key === "string" && key) {
+                void ensureBlobUrlForKey(key);
+            }
+        }
+    }, [keys, flow.steps]);
 
     function onRequestRerun(stepId: string) { setConfirmRerun({ stepId }); }
     function onConfirmRerun() {
@@ -218,7 +262,9 @@ export default function FlowRunner({ slug, flow }: Props) {
                                         onClick={() => {
                                             const key = keys[step.id];
                                             if (step.type === "imgGenerator" && key && !loading[step.id]) {
-                                                setLightbox({ open: true, src: `/api/r2/${key}`, alt: step.name });
+                                                ensureBlobUrlForKey(key)
+                                                    .then((url) => setLightbox({ open: true, src: url, alt: step.name }))
+                                                    .catch((e) => toast.error(e instanceof Error ? e.message : "下載失敗"));
                                             }
                                         }}
                                     >

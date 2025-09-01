@@ -201,10 +201,11 @@
                     "type": "imgGenerator",
                     "data": {
                         "model": "gemini-2.5-flash-image-preview",
-                        "prompt": "Generate a realistic photo of a realistic cosplayer cosplaying the illustration in Comiket.",
+                        "prompt": "Generate a realistic photo of a realistic cosplayer cosplaying the illustration in Comiket. The cosplayer should have a similar pose and expression as the character in the illustration of image 2.",
                         "temperature": 1,
                         "referenceImgs": [
-                            "19695F27-8DDB-446C-895D-B11A980508BE"
+                            "19695F27-8DDB-446C-895D-B11A980508BE",
+                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
                         ]
                     }
                 }
