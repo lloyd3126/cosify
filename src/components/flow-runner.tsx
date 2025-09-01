@@ -261,7 +261,7 @@ export default function FlowRunner({ slug, flow }: Props) {
     }
 
     return (
-        <div className="mx-auto w-full max-w-6xl p-6">
+        <div className="mx-auto w-full max-w-6xl p-6 pb-12">
             <Toaster richColors />
 
             <div className="mt-8 mb-12">
