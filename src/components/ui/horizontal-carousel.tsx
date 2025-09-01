@@ -30,6 +30,8 @@ export default function HorizontalCarousel<T>({ items, renderItem, className }: 
     const canGoNext = cursor < maxCursor;
     const goPrev = () => { if (canGoPrev) setCursor((c) => Math.max(0, c - 1)); };
     const goNext = () => { if (canGoNext) setCursor((c) => Math.min(maxCursor, c + 1)); };
+    const showArrows = items.length >= 4;
+    const centerMode = isMd && items.length <= 2;
 
     useEffect(() => {
         const recompute = () => {
@@ -70,32 +72,36 @@ export default function HorizontalCarousel<T>({ items, renderItem, className }: 
     return (
         <div className={className}>
             <div className="relative">
-                <button
-                    type="button"
-                    onClick={goPrev}
-                    disabled={!canGoPrev}
-                    aria-label="上一張"
-                    title="上一張"
-                    className="absolute -left-12 top-1/2 -translate-y-1/2 rounded-full bg-background/90 p-1 disabled:opacity-40"
-                >
-                    <CircleChevronLeft className="h-7 w-7" />
-                </button>
-                <button
-                    type="button"
-                    onClick={goNext}
-                    disabled={!canGoNext}
-                    aria-label="下一張"
-                    title="下一張"
-                    className="absolute -right-12 top-1/2 -translate-y-1/2 rounded-full bg-background/90 p-1 disabled:opacity-40"
-                >
-                    <CircleChevronRight className="h-7 w-7" />
-                </button>
+                {showArrows && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={goPrev}
+                            disabled={!canGoPrev}
+                            aria-label="上一張"
+                            title="上一張"
+                            className="absolute -left-12 top-1/2 -translate-y-1/2 rounded-full bg-background/90 p-1 disabled:opacity-40"
+                        >
+                            <CircleChevronLeft className="h-7 w-7" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={goNext}
+                            disabled={!canGoNext}
+                            aria-label="下一張"
+                            title="下一張"
+                            className="absolute -right-12 top-1/2 -translate-y-1/2 rounded-full bg-background/90 p-1 disabled:opacity-40"
+                        >
+                            <CircleChevronRight className="h-7 w-7" />
+                        </button>
+                    </>
+                )}
 
                 <div className="overflow-hidden" ref={containerRef}>
                     <div
                         ref={trackRef}
-                        className="flex gap-4 transition-transform duration-300 ease-in-out"
-                        style={{ transform: stepPx > 0 ? `translateX(${-cursor * stepPx}px)` : undefined }}
+                        className={`flex gap-4 transition-transform duration-300 ease-in-out ${centerMode ? "justify-center" : ""}`}
+                        style={{ transform: stepPx > 0 && !centerMode ? `translateX(${-cursor * stepPx}px)` : undefined }}
                     >
                         {items.map((item, idx) => (
                             <div key={idx} className="shrink-0" style={{ width: itemWidth ? `${itemWidth}px` : undefined }}>
