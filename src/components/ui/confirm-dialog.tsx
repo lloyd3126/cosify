@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 import { Button } from "@/components/ui/button";
 import clsx from "clsx";
 
@@ -34,12 +35,11 @@ export function ConfirmDialog({
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onCancel]);
 
-    // Optional: lock background scroll when open
+    // Lock background scroll when open (with scrollbar compensation)
     useEffect(() => {
         if (!open) return;
-        const prev = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        return () => { document.body.style.overflow = prev; };
+        lockBodyScroll();
+        return () => unlockBodyScroll();
     }, [open]);
 
     if (!open) return null;

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/scroll-lock";
 
 type LightboxProps = {
     open: boolean;
@@ -23,14 +24,11 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
 
     useEffect(() => { setMounted(true); }, []);
 
-    // Lock background scroll when open
+    // Lock background scroll when open (with scrollbar compensation)
     useEffect(() => {
         if (!open) return;
-        const prev = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        return () => {
-            document.body.style.overflow = prev;
-        };
+        lockBodyScroll();
+        return () => unlockBodyScroll();
     }, [open]);
 
     useEffect(() => {
