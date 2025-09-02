@@ -17,7 +17,10 @@ export default function FlowHistory({ slug, flowName }: Props) {
     const [loading, setLoading] = useState(false);
     const [cursor, setCursor] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState<boolean>(true);
+    // items 快取（runId -> items）；不等同於 UI 是否展開
     const [expanded, setExpanded] = useState<Record<string, Array<{ r2Key: string; createdAt: string; kind?: string }>>>({});
+    // UI 展開狀態（runId 集合）
+    const [expandedUI, setExpandedUI] = useState<Set<string>>(new Set());
     const [expanding, setExpanding] = useState<Set<string>>(new Set());
     const [cols, setCols] = useState(3); // xs 預設 3 欄
     // Lightbox 狀態（同一個 run 左右切換）
@@ -137,8 +140,14 @@ export default function FlowHistory({ slug, flowName }: Props) {
     }
 
     async function toggleExpand(runId: string) {
+        // 若目前是展開 -> 收合
+        if (expandedUI.has(runId)) {
+            setExpandedUI((prev) => { const n = new Set(prev); n.delete(runId); return n; });
+            return;
+        }
+        // 展開：若有快取直接展開；否則先載入後展開
         if (expanded[runId]) {
-            setExpanded((m) => { const n = { ...m }; delete n[runId]; return n; });
+            setExpandedUI((prev) => new Set(prev).add(runId));
             return;
         }
         setExpanding((prev) => new Set(prev).add(runId));
@@ -147,6 +156,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "讀取失敗");
             setExpanded((m) => ({ ...m, [runId]: (data.items || []) as Array<{ r2Key: string; createdAt: string; kind?: string }> }));
+            setExpandedUI((prev) => new Set(prev).add(runId));
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "讀取失敗");
         } finally {
@@ -232,7 +242,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                 <div className="text-sm text-muted-foreground">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
                                 <div className="flex items-center gap-2">
                                     {(() => {
-                                        const isExpanded = !!expanded[r.runId];
+                                        const isExpanded = expandedUI.has(r.runId);
                                         const canExpand = r.itemsTotal > cols;
                                         if (!(isExpanded || canExpand)) return null;
                                         return (
@@ -244,7 +254,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                     <Button variant="destructive" onClick={() => remove(r.runId)}>刪除</Button>
                                 </div>
                             </div>
-                            {!expanded[r.runId] ? (
+                            {!expandedUI.has(r.runId) ? (
                                 <div className={gridColsClass}>
                                     {r.itemsPreview.slice(0, cols).map((it, i) => (
                                         <div
@@ -276,7 +286,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                 </div>
                             ) : (
                                 <div className={gridColsClass}>
-                                    {expanded[r.runId]!.map((it, i) => (
+                                    {(expanded[r.runId] || []).map((it, i) => (
                                         <div
                                             key={`${it.r2Key}-${i}`}
                                             className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
@@ -303,6 +313,9 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                             </div>
                                         </div>
                                     ))}
+                                    {(!expanded[r.runId] || expanded[r.runId]!.length === 0) && expanding.has(r.runId) ? (
+                                        <div className="text-sm text-muted-foreground">讀取中…</div>
+                                    ) : null}
                                 </div>
                             )}
                         </Card>
