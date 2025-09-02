@@ -6,7 +6,7 @@ import UploadCard from "@/components/ui/upload-card";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { Toaster, toast } from "sonner";
-import { Download, X, WandSparkles, Grid3X3 } from "lucide-react";
+import { Download, X, WandSparkles, Grid3X3, BookmarkCheck } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
 import Lightbox from "@/components/ui/lightbox";
@@ -800,13 +800,33 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                     </div>
                                                 )}
                                                 {item.status === "done" && item.key && adopted === item.key ? (
-                                                    <div className="absolute left-2 top-2 rounded bg-emerald-600 text-white text-[11px] px-2 py-0.5">已採用</div>
+                                                    <div className="absolute left-2 top-2 z-10 rounded bg-emerald-600 text-white p-1" aria-label="已採用">
+                                                        <BookmarkCheck className="h-4 w-4 text-white" />
+                                                    </div>
                                                 ) : null}
                                                 {item.status === "done" && item.key ? (
-                                                    <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <Button size="sm" onClick={(e) => { e.stopPropagation(); setKeys((s) => ({ ...s, [openModalFor]: item.key! })); setOpenModalFor(null); }} aria-label="設為本步結果">採用</Button>
-                                                            <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); downloadByKey(item.key!, openModalFor); }} aria-label="下載">下載</Button>
+                                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none z-0">
+                                                        <div className="absolute inset-x-0 bottom-0 p-2 pointer-events-auto">
+                                                            <div className={`grid ${adopted === item.key ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
+                                                                {adopted === item.key ? null : (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="bg-black text-white hover:bg-black/90"
+                                                                        onClick={(e) => { e.stopPropagation(); setKeys((s) => ({ ...s, [openModalFor]: item.key! })); setOpenModalFor(null); }}
+                                                                        aria-label="設為本步結果"
+                                                                    >
+                                                                        <BookmarkCheck className="h-4 w-4 text-white" />
+                                                                    </Button>
+                                                                )}
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="bg-black text-white hover:bg-black/90"
+                                                                    onClick={(e) => { e.stopPropagation(); downloadByKey(item.key!, openModalFor); }}
+                                                                    aria-label="下載"
+                                                                >
+                                                                    <Download className="h-4 w-4 text-white" />
+                                                                </Button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 ) : null}
@@ -821,6 +841,118 @@ export default function FlowRunner({ slug, flow }: Props) {
                                 const q = generationQueue[openModalFor] || [];
                                 const count = q.length > 0 ? q.length : (candidates[openModalFor]?.length ?? 0);
                                 return <div>已生成 {count} 張</div>;
+                            })()}
+                            {(() => {
+                                const step = flow.steps.find((s) => s.id === openModalFor && s.type === "imgGenerator");
+                                if (!step || step.type !== "imgGenerator") return null;
+                                const disabled = !refsReady(step) || !!loading[step.id];
+                                return (
+                                    <div className="flex items-center gap-2 text-foreground">
+                                        {/* 單張生成（存為變體並採用）*/}
+                                        <Button
+                                            size="sm"
+                                            className="w-16 justify-center"
+                                            disabled={disabled}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!runId) return;
+                                                // 與卡片一致：使下游失效
+                                                invalidateFrom(step.id);
+                                                // 先加入隊列占位（單次一張）
+                                                const entryId = uid();
+                                                queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
+                                                setLoading((s) => ({ ...s, [step.id]: true }));
+                                                const opId = nextOpId(step.id);
+                                                (async () => {
+                                                    try {
+                                                        const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                        // 標記為 running
+                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "running" }));
+                                                        const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
+                                                            method: "POST",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: step.data.temperature, inputKeys: refs, asVariant: true }),
+                                                        });
+                                                        const data = await res.json();
+                                                        if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                        if (!isCurrentOp(step.id, opId)) return;
+                                                        setKeys((k) => ({ ...k, [step.id]: data.key }));
+                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key }));
+                                                        void ensureBlobUrlForKey(data.key).catch(() => { });
+                                                    } catch (err) {
+                                                        const msg = err instanceof Error ? err.message : "生成失敗";
+                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "error", error: msg }));
+                                                        toast.error(msg);
+                                                    } finally {
+                                                        setLoading((s) => ({ ...s, [step.id]: false }));
+                                                    }
+                                                })();
+                                            }}
+                                            aria-label="生成"
+                                        >
+                                            <WandSparkles className="h-4 w-4" />
+                                        </Button>
+                                        {/* 3x 生成（0.0/0.5/1.0；三張皆為變體，最後一張採用） */}
+                                        <Button
+                                            size="sm"
+                                            className="w-16 justify-center"
+                                            disabled={disabled}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!runId) return;
+                                                // 與卡片一致：使下游失效
+                                                invalidateFrom(step.id);
+                                                setLoading((s) => ({ ...s, [step.id]: true }));
+                                                const opId = nextOpId(step.id);
+                                                (async () => {
+                                                    try {
+                                                        const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                        const temps = [0.0, 0.5, 1.0];
+                                                        let lastKey: string | null = null;
+                                                        // 預先加入三個 queued 占位
+                                                        const entries = temps.map((t) => ({ id: uid(), status: "queued" as const, temperature: t }));
+                                                        queueAdd(step.id, entries);
+                                                        for (let i = 0; i < temps.length; i++) {
+                                                            const t = temps[i];
+                                                            const asVariant = true; // 全部存為變體
+                                                            // 標記第 i 個為 running
+                                                            queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "running" }));
+                                                            const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
+                                                                method: "POST",
+                                                                headers: { "Content-Type": "application/json" },
+                                                                body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: t, inputKeys: refs, asVariant }),
+                                                            });
+                                                            const data = await res.json();
+                                                            if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                            if (!isCurrentOp(step.id, opId)) return;
+                                                            queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key }));
+                                                            void ensureBlobUrlForKey(data.key).catch(() => { });
+                                                            lastKey = data.key as string;
+                                                        }
+                                                        if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                    } catch (err) {
+                                                        const msg = err instanceof Error ? err.message : "生成失敗";
+                                                        // 標記所有未完成為 error
+                                                        setGenerationQueue((prev) => {
+                                                            const list = prev[step.id] || [];
+                                                            const next = list.map((e): GenEntry => (e.status === "queued" || e.status === "running")
+                                                                ? { ...e, status: "error" as GenStatus, error: msg }
+                                                                : e
+                                                            );
+                                                            return { ...prev, [step.id]: next };
+                                                        });
+                                                        toast.error(msg);
+                                                    } finally {
+                                                        setLoading((s) => ({ ...s, [step.id]: false }));
+                                                    }
+                                                })();
+                                            }}
+                                            aria-label="3x 生成"
+                                        >
+                                            <WandSparkles className="h-4 w-4" /> 3
+                                        </Button>
+                                    </div>
+                                );
                             })()}
                         </div>
                     </div>
