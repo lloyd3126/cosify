@@ -11,9 +11,9 @@ import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
 import Lightbox from "@/components/ui/lightbox";
 
-type Props = { slug: string; flow: Flow };
+type Props = { slug: string; flow: Flow; runIdFromUrl?: string | null };
 
-export default function FlowRunner({ slug, flow }: Props) {
+export default function FlowRunner({ slug, flow, runIdFromUrl }: Props) {
     const [runId, setRunId] = useState<string | null>(null);
     const [files, setFiles] = useState<Record<string, File | null>>({});
     const [keys, setKeys] = useState<Record<string, string | null>>({});
@@ -132,11 +132,27 @@ export default function FlowRunner({ slug, flow }: Props) {
     const [confirmRerun, setConfirmRerun] = useState<{ stepId: string | null }>({ stepId: null });
     const [confirmClear, setConfirmClear] = useState<{ stepId: string | null }>({ stepId: null });
 
-    // 初始化建立 run
+    // 初始化：若帶入 runId 則恢復狀態；否則建立新 run
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
+                if (runIdFromUrl) {
+                    if (!cancelled) setRunId(runIdFromUrl);
+                    // 取回各步驟狀態並恢復 keys
+                    try {
+                        const res = await fetch(`/api/flows/${slug}/runs/${encodeURIComponent(runIdFromUrl)}/state`, { cache: "no-store" });
+                        const data = await res.json();
+                        if (res.ok && Array.isArray(data?.steps)) {
+                            const map: Record<string, string | null> = {};
+                            for (const s of data.steps as Array<{ stepId: string; r2Key: string | null }>) {
+                                if (s && s.stepId) map[s.stepId] = s.r2Key ?? null;
+                            }
+                            setKeys((prev) => ({ ...prev, ...map }));
+                        }
+                    } catch { /* ignore */ }
+                    return;
+                }
                 const res = await fetch(`/api/flows/${slug}/run`, { method: "POST", cache: "no-store" });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data?.error || "建立執行失敗");
@@ -147,7 +163,8 @@ export default function FlowRunner({ slug, flow }: Props) {
         })();
         return () => {
             // 元件卸載時嘗試條件清理：若未生成任何圖片就移除 run
-            if (runId) {
+            // 恢復既有 run（runIdFromUrl 存在）時不進行清理
+            if (runId && !runIdFromUrl) {
                 const url = `/api/flows/${slug}/runs/${encodeURIComponent(runId)}/cleanup-if-empty`;
                 try {
                     const blob = new Blob([JSON.stringify({})], { type: "application/json" });
@@ -159,11 +176,11 @@ export default function FlowRunner({ slug, flow }: Props) {
             }
             cancelled = true;
         };
-    }, [slug]);
+    }, [slug, runIdFromUrl]);
 
     // 頁面關閉/導航時也嘗試清理
     useEffect(() => {
-        if (!runId) return;
+        if (!runId || runIdFromUrl) return;
         const handler = () => {
             try {
                 const url = `/api/flows/${slug}/runs/${encodeURIComponent(runId)}/cleanup-if-empty`;
@@ -177,7 +194,7 @@ export default function FlowRunner({ slug, flow }: Props) {
             window.removeEventListener("pagehide", handler);
             window.removeEventListener("beforeunload", handler);
         };
-    }, [runId, slug]);
+    }, [runId, slug, runIdFromUrl]);
 
     // 使用共用 HorizontalCarousel 取代內建輪播
 
@@ -455,10 +472,20 @@ export default function FlowRunner({ slug, flow }: Props) {
                                         if (f) uploadStep(step, f);
                                     }}
                                     accept="image/*"
+                                    previewUrl={typeof keys[step.id] === "string" && keys[step.id] ? `/api/r2/${keys[step.id]}` : null}
                                     onOpen={() => {
                                         const idx = flow.steps.findIndex((s) => s.id === step.id);
-                                        const url = uploaderUrls[step.id];
-                                        if (url) setLightbox({ open: true, src: url, alt: step.name, index: idx });
+                                        const localUrl = uploaderUrls[step.id];
+                                        if (localUrl) {
+                                            setLightbox({ open: true, src: localUrl, alt: step.name, index: idx });
+                                            return;
+                                        }
+                                        const key = keys[step.id];
+                                        if (typeof key === "string" && key) {
+                                            ensureBlobUrlForKey(key)
+                                                .then((url) => setLightbox({ open: true, src: url, alt: step.name, index: idx }))
+                                                .catch(() => { /* ignore */ });
+                                        }
                                     }}
                                 />
                             ) : (

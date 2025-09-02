@@ -18,26 +18,26 @@ export type UploadCardProps = {
     className?: string;
     placeholder?: React.ReactNode;
     onOpen?: () => void; // ask parent to open lightbox
+    previewUrl?: string | null; // optional remote image URL for restore
 };
 
-export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChange, className, placeholder, onOpen }: UploadCardProps) {
+export function UploadCard({ label, accept = "image/*", maxSizeMB, file, onChange, className, placeholder, onOpen, previewUrl }: UploadCardProps) {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [dragOver, setDragOver] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [preview, setPreview] = useState<string | null>(null);
+    const [preview, setPreview] = useState<string | null>(previewUrl ?? null);
     const aspect = "9 / 16"; // 固定 9:16 外觀
     const [confirmOpen, setConfirmOpen] = useState(false);
 
 
     useEffect(() => {
-        if (!file) {
-            setPreview(null);
-            return;
+        if (file) {
+            const url = URL.createObjectURL(file);
+            setPreview(url);
+            return () => URL.revokeObjectURL(url);
         }
-        const url = URL.createObjectURL(file);
-        setPreview(url);
-        return () => URL.revokeObjectURL(url);
-    }, [file]);
+        setPreview(previewUrl ?? null);
+    }, [file, previewUrl]);
 
     const validate = useCallback((f: File) => {
         if (accept && !f.type.startsWith(accept.replace("/*", "/"))) {

@@ -6,9 +6,12 @@ import FlowRunner from "../../../src/components/flow-runner";
 
 export const dynamic = "force-dynamic";
 
-export default async function FlowRunnerPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function FlowRunnerPage({ params, searchParams }: { params: Promise<{ slug: string }>, searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const { slug } = await params;
     const h = await headers();
+    const sp = (await (searchParams ?? Promise.resolve({}))) as Record<string, string | string[] | undefined>;
+    const runIdRaw = sp?.runId;
+    const runIdFromUrl = Array.isArray(runIdRaw) ? (runIdRaw[0] ?? null) : (runIdRaw ?? null);
     const session = await auth.api.getSession({ headers: h });
     if (!session) {
         return (
@@ -53,6 +56,6 @@ export default async function FlowRunnerPage({ params }: { params: Promise<{ slu
     }
 
     return (
-        <FlowRunner slug={slug} flow={flow} />
+        <FlowRunner slug={slug} flow={flow} runIdFromUrl={runIdFromUrl} />
     );
 }

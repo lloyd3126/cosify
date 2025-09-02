@@ -6,12 +6,14 @@ import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
 import { Download } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type Props = { slug: string; flowName: string };
 
 type RunPreview = { runId: string; createdAt: string; itemsPreview: Array<{ r2Key: string; createdAt: string }>; itemsTotal: number };
 
 export default function FlowHistory({ slug, flowName }: Props) {
+    const router = useRouter();
     const PAGE_SIZE = 5;
     const [runs, setRuns] = useState<RunPreview[]>([]);
     const [loading, setLoading] = useState(false);
@@ -253,6 +255,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                             </Button>
                                         );
                                     })()}
+                                    <Button variant="secondary" onClick={() => router.push(`/flows/${slug}?runId=${encodeURIComponent(r.runId)}`)}>返回</Button>
                                     <Button variant="destructive" onClick={() => remove(r.runId)}>刪除</Button>
                                 </div>
                             </div>
