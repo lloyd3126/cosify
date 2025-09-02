@@ -6,15 +6,15 @@ import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
-import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, Trash, ArchiveRestore } from "lucide-react";
+import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, Trash, ArchiveRestore, FilePlus2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-type Props = { slug: string; flowName: string };
+type Props = { slug: string; flowName: string; currentRunId?: string | null };
 
 type RunPreview = { runId: string; createdAt: string; itemsPreview: Array<{ r2Key: string; createdAt: string }>; itemsTotal: number };
 
-export default function FlowHistory({ slug, flowName }: Props) {
+export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
     const router = useRouter();
     const PAGE_SIZE = 5;
     const [runs, setRuns] = useState<RunPreview[]>([]);
@@ -242,13 +242,22 @@ export default function FlowHistory({ slug, flowName }: Props) {
             <div className="mx-auto max-w-5xl p-6 space-y-6">
                 <Toaster richColors />
                 {slug === "cosplay-generation" ? (
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-between">
                         <Link
-                            href={`/flows/${encodeURIComponent(slug)}`}
+                            href={currentRunId ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}` : `/flows/${encodeURIComponent(slug)}/new`}
                             className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
                             aria-label="返回"
                         >
                             <ArrowLeftFromLine className="h-5 w-5" />
+                        </Link>
+                        <div className="flex-1" />
+                        <Link
+                            href={`/flows/${encodeURIComponent(slug)}/new`}
+                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                            aria-label="開起新的任務"
+                            title="開起新的任務"
+                        >
+                            <FilePlus2 className="h-5 w-5" />
                         </Link>
                     </div>
                 ) : (

@@ -518,7 +518,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                     </button>
                     {hasHistory ? (
                         <Link
-                            href={`/flows/${encodeURIComponent(slug)}/history`}
+                            href={runId ? `/flows/${encodeURIComponent(slug)}/history?runId=${encodeURIComponent(runId)}` : `/flows/${encodeURIComponent(slug)}/history`}
                             className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
                             aria-label="前往歷史紀錄"
                         >

@@ -8,9 +8,12 @@ import FlowHistory from "../../../../src/components/flow-history";
 
 export const dynamic = "force-dynamic";
 
-export default async function FlowHistoryPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function FlowHistoryPage({ params, searchParams }: { params: Promise<{ slug: string }>, searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
     const { slug } = await params;
     const h = await headers();
+    const sp = (await (searchParams ?? Promise.resolve({}))) as Record<string, string | string[] | undefined>;
+    const runIdRaw = sp?.runId;
+    const runIdFromUrl = Array.isArray(runIdRaw) ? (runIdRaw[0] ?? null) : (runIdRaw ?? null);
     const session = await auth.api.getSession({ headers: h });
     if (!session) {
         return (
@@ -62,5 +65,5 @@ export default async function FlowHistoryPage({ params }: { params: Promise<{ sl
         }
     } catch { /* 靜默清理 */ }
 
-    return <FlowHistory slug={slug} flowName={flow.name} />;
+    return <FlowHistory slug={slug} flowName={flow.name} currentRunId={runIdFromUrl} />;
 }
