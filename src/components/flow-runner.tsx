@@ -5,15 +5,16 @@ import { Button } from "@/components/ui/button";
 import UploadCard from "@/components/ui/upload-card";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
+import Link from "next/link";
 import { Toaster, toast } from "sonner";
-import { Download, X, WandSparkles, Grid3X3, BookmarkCheck } from "lucide-react";
+import { Download, X, WandSparkles, Grid3X3, BookmarkCheck, List, History } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
 import Lightbox from "@/components/ui/lightbox";
 
-type Props = { slug: string; flow: Flow; runIdFromUrl?: string | null };
+type Props = { slug: string; flow: Flow; runIdFromUrl?: string | null; hasHistory?: boolean };
 
-export default function FlowRunner({ slug, flow, runIdFromUrl }: Props) {
+export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Props) {
     const [runId, setRunId] = useState<string | null>(null);
     const [files, setFiles] = useState<Record<string, File | null>>({});
     const [keys, setKeys] = useState<Record<string, string | null>>({});
@@ -452,6 +453,24 @@ export default function FlowRunner({ slug, flow, runIdFromUrl }: Props) {
                 {flow.metadata?.description ? (
                     <p className="text-1xl text-muted-foreground mt-3 text-center tracking-widest">{flow.metadata.description}</p>
                 ) : null}
+                <div className="mt-4 flex justify-center gap-2">
+                    <Link
+                        href={`/flows`}
+                        className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
+                        aria-label="返回工具清單"
+                    >
+                        <List className="h-4 w-4" />
+                    </Link>
+                    {hasHistory ? (
+                        <Link
+                            href={`/flows/${encodeURIComponent(slug)}/history`}
+                            className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
+                            aria-label="前往歷史紀錄"
+                        >
+                            <History className="h-4 w-4" />
+                        </Link>
+                    ) : null}
+                </div>
             </div>
 
             {!runId ? (

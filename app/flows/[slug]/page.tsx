@@ -1,5 +1,6 @@
 import { auth } from "@/server/auth";
 import { getFlowBySlug, validateFlow } from "@/server/flows";
+import { db, schema } from "@/server/db";
 import { headers } from "next/headers";
 import Link from "next/link";
 import FlowRunner from "../../../src/components/flow-runner";
@@ -55,7 +56,11 @@ export default async function FlowRunnerPage({ params, searchParams }: { params:
         );
     }
 
-    return (
-        <FlowRunner slug={slug} flow={flow} runIdFromUrl={runIdFromUrl} />
-    );
+    // 決定是否顯示「前往歷史紀錄」按鈕：該使用者在此 slug 是否有任何 run
+    const hasHistory = !!(await db.query.flowRuns.findFirst({
+        where: (t, { eq, and }) => and(eq(t.userId, session.user.id), eq(t.slug, slug)),
+        columns: { runId: true },
+    }));
+
+    return <FlowRunner slug={slug} flow={flow} runIdFromUrl={runIdFromUrl} hasHistory={hasHistory} />;
 }
