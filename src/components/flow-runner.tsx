@@ -6,7 +6,7 @@ import UploadCard from "@/components/ui/upload-card";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { Toaster, toast } from "sonner";
-import { Download, RotateCw, X, WandSparkles } from "lucide-react";
+import { Download, RotateCw, X, WandSparkles, Grid3X3 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
 import Lightbox from "@/components/ui/lightbox";
@@ -260,6 +260,20 @@ export default function FlowRunner({ slug, flow }: Props) {
         return step.data.referenceImgs.every(ref => !!keys[ref]);
     }
 
+    // 候選清單（僅本次會話）
+    const [candidates, setCandidates] = useState<Record<string, string[]>>({}); // stepId -> keys[]
+    function addCandidate(stepId: string, key: string) {
+        setCandidates((prev) => {
+            const arr = prev[stepId] ? [...prev[stepId]] : [];
+            if (!arr.includes(key)) arr.push(key);
+            return { ...prev, [stepId]: arr };
+        });
+        void ensureBlobUrlForKey(key).catch(() => { });
+    }
+
+    // 已生成 Modal（候選檢視）
+    const [openModalFor, setOpenModalFor] = useState<string | null>(null);
+
     return (
         <div className="mx-auto w-full max-w-6xl p-6 pb-12">
             <Toaster richColors />
@@ -330,21 +344,168 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                     </button>
                                                     {/* Bottom overlay actions */}
                                                     <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
-                                                        <div className="w-full grid grid-cols-2 gap-2">
-                                                            <Button className="w-full" onClick={(e) => { e.stopPropagation(); onRequestRerun(step.id); }} aria-label="重新生成">
-                                                                <RotateCw className="h-4 w-4" />
+                                                        <div className="w-full grid grid-cols-3 gap-2">
+                                                            {/* 生成（覆蓋採用，會使下游失效） */}
+                                                            <Button
+                                                                className="w-full"
+                                                                disabled={!refsReady(step) || !!loading[step.id]}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!runId) return;
+                                                                    invalidateFrom(step.id);
+                                                                    setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                    (async () => {
+                                                                        try {
+                                                                            const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                                            const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
+                                                                                method: "POST",
+                                                                                headers: { "Content-Type": "application/json" },
+                                                                                body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: step.data.temperature, inputKeys: refs, asVariant: false }),
+                                                                            });
+                                                                            const data = await res.json();
+                                                                            if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                                            setKeys((k) => ({ ...k, [step.id]: data.key }));
+                                                                            addCandidate(step.id, data.key);
+                                                                        } catch (err) {
+                                                                            toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                        } finally {
+                                                                            setLoading((s) => ({ ...s, [step.id]: false }));
+                                                                        }
+                                                                    })();
+                                                                }}
+                                                                aria-label="生成"
+                                                            >
+                                                                <WandSparkles className="h-4 w-4" />
                                                             </Button>
-                                                            <Button className="w-full" onClick={(e) => { e.stopPropagation(); downloadByKey(keys[step.id] ?? null, step.id); }} aria-label="下載">
-                                                                <Download className="h-4 w-4" />
+                                                            {/* 3x 生成（0.0/0.5/1.0 串行；最後一張採用） */}
+                                                            <Button
+                                                                className="w-full"
+                                                                disabled={!refsReady(step) || !!loading[step.id]}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!runId) return;
+                                                                    invalidateFrom(step.id);
+                                                                    setOpenModalFor(step.id);
+                                                                    setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                    (async () => {
+                                                                        try {
+                                                                            const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                                            const temps = [0.0, 0.5, 1.0];
+                                                                            let lastKey: string | null = null;
+                                                                            for (let i = 0; i < temps.length; i++) {
+                                                                                const t = temps[i];
+                                                                                const asVariant = i < temps.length - 1;
+                                                                                const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
+                                                                                    method: "POST",
+                                                                                    headers: { "Content-Type": "application/json" },
+                                                                                    body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: t, inputKeys: refs, asVariant }),
+                                                                                });
+                                                                                const data = await res.json();
+                                                                                if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                                                addCandidate(step.id, data.key);
+                                                                                lastKey = data.key as string;
+                                                                            }
+                                                                            if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                                        } catch (err) {
+                                                                            toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                        } finally {
+                                                                            setLoading((s) => ({ ...s, [step.id]: false }));
+                                                                        }
+                                                                    })();
+                                                                }}
+                                                                aria-label="3x 生成"
+                                                            >
+                                                                <WandSparkles className="h-4 w-4" /> 3
+                                                            </Button>
+                                                            {/* 已生成（開啟候選 Modal） */}
+                                                            <Button
+                                                                className="w-full bg-black text-white hover:bg-black/90"
+                                                                onClick={(e) => { e.stopPropagation(); setOpenModalFor(step.id); }}
+                                                                aria-label="已生成"
+                                                            >
+                                                                <Grid3X3 className="h-4 w-4 text-white" />
                                                             </Button>
                                                         </div>
                                                     </div>
                                                 </>
                                             ) : (
                                                 <div className="absolute inset-x-0 bottom-0 p-3">
-                                                    <div className="w-full grid grid-cols-1 gap-2">
-                                                        <Button className="w-full" onClick={() => generateStep(step)} disabled={!refsReady(step) || !!loading[step.id]} aria-label="生成">
+                                                    <div className="w-full grid grid-cols-3 gap-2">
+                                                        {/* 生成（初次） */}
+                                                        <Button
+                                                            className="w-full"
+                                                            onClick={() => {
+                                                                if (!runId) return;
+                                                                setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                (async () => {
+                                                                    try {
+                                                                        const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                                        const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
+                                                                            method: "POST",
+                                                                            headers: { "Content-Type": "application/json" },
+                                                                            body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: step.data.temperature, inputKeys: refs, asVariant: false }),
+                                                                        });
+                                                                        const data = await res.json();
+                                                                        if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                                        setKeys((k) => ({ ...k, [step.id]: data.key }));
+                                                                        addCandidate(step.id, data.key);
+                                                                    } catch (err) {
+                                                                        toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                    } finally {
+                                                                        setLoading((s) => ({ ...s, [step.id]: false }));
+                                                                    }
+                                                                })();
+                                                            }}
+                                                            disabled={!refsReady(step) || !!loading[step.id]}
+                                                            aria-label="生成"
+                                                        >
                                                             <WandSparkles className="h-4 w-4" />
+                                                        </Button>
+                                                        {/* 3x 生成（初次） */}
+                                                        <Button
+                                                            className="w-full"
+                                                            disabled={!refsReady(step) || !!loading[step.id]}
+                                                            onClick={() => {
+                                                                if (!runId) return;
+                                                                setOpenModalFor(step.id);
+                                                                setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                (async () => {
+                                                                    try {
+                                                                        const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                                        const temps = [0.0, 0.5, 1.0];
+                                                                        let lastKey: string | null = null;
+                                                                        for (let i = 0; i < temps.length; i++) {
+                                                                            const t = temps[i];
+                                                                            const asVariant = i < temps.length - 1;
+                                                                            const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
+                                                                                method: "POST",
+                                                                                headers: { "Content-Type": "application/json" },
+                                                                                body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: t, inputKeys: refs, asVariant }),
+                                                                            });
+                                                                            const data = await res.json();
+                                                                            if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                                            addCandidate(step.id, data.key);
+                                                                            lastKey = data.key as string;
+                                                                        }
+                                                                        if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                                    } catch (err) {
+                                                                        toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                    } finally {
+                                                                        setLoading((s) => ({ ...s, [step.id]: false }));
+                                                                    }
+                                                                })();
+                                                            }}
+                                                            aria-label="3x 生成"
+                                                        >
+                                                            <WandSparkles className="h-4 w-4" /> 3
+                                                        </Button>
+                                                        {/* 已生成 */}
+                                                        <Button
+                                                            className="w-full bg-black text-white hover:bg-black/90"
+                                                            onClick={() => setOpenModalFor(step.id)}
+                                                            aria-label="已生成"
+                                                        >
+                                                            <Grid3X3 className="h-4 w-4 text-white" />
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -453,6 +614,49 @@ export default function FlowRunner({ slug, flow }: Props) {
                     return false;
                 })()}
             />
+
+            {/* 候選 Modal */}
+            {openModalFor && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/60" onClick={() => setOpenModalFor(null)} />
+                    <div className="relative z-10 w-[96vw] max-w-4xl max-h-[90vh] rounded-lg bg-background shadow-lg border">
+                        <div className="flex items-center justify-between p-4 border-b">
+                            <div className="font-medium">已生成</div>
+                            <button className="rounded p-1 hover:bg-muted" aria-label="關閉" onClick={() => setOpenModalFor(null)}>
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-auto" style={{ maxHeight: "70vh" }}>
+                            {(() => {
+                                const list = candidates[openModalFor] || [];
+                                if (list.length === 0) return <div className="text-sm text-muted-foreground">尚無生成結果</div>;
+                                const adopted = keys[openModalFor] || null;
+                                return (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                        {list.map((k) => (
+                                            <div key={k} className="group relative w-full overflow-hidden rounded-md border" style={{ aspectRatio: "9 / 16" }}>
+                                                <Image src={`/api/r2/${k}`} alt={openModalFor} fill className="object-cover" />
+                                                {adopted === k ? (
+                                                    <div className="absolute left-2 top-2 rounded bg-emerald-600 text-white text-[11px] px-2 py-0.5">已採用</div>
+                                                ) : null}
+                                                <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <Button size="sm" onClick={() => { setKeys((s) => ({ ...s, [openModalFor]: k })); setOpenModalFor(null); }} aria-label="設為本步結果">採用</Button>
+                                                        <Button size="sm" variant="secondary" onClick={() => downloadByKey(k, openModalFor)} aria-label="下載">下載</Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                        <div className="flex items-center justify-between p-4 border-t text-sm text-muted-foreground">
+                            <div>已生成 {(candidates[openModalFor]?.length ?? 0)} 張</div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

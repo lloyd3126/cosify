@@ -4,6 +4,7 @@ import { getFlowBySlug } from "@/server/flows";
 import { db, schema } from "@/server/db";
 import { r2Get, r2Put } from "@/server/r2";
 import { ai } from "@/server/genai";
+import { randomUUID } from "node:crypto";
 
 type Part = { text?: string } | { inlineData?: { data?: string; mimeType?: string } };
 function hasInline(p: Part): p is { inlineData: { data: string; mimeType?: string } } {
@@ -19,6 +20,7 @@ type GenPayload = {
     prompt: string;
     temperature?: number;
     inputKeys?: string[]; // 來自 R2 的 key 陣列（按順序）
+    asVariant?: boolean; // 若為 true，輸出存為變體，不覆蓋主檔，也不更新 DB 的 r2Key
 };
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string; stepId: string }> }) {
@@ -59,10 +61,38 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         if (!base64) return NextResponse.json({ error: "模型未產出影像" }, { status: 500 });
         const out = Buffer.from(base64, "base64");
 
-        const key = `flows/${slug}/${session.user.id}/${body.runId}/${stepId}.png`;
+        const baseDir = `flows/${slug}/${session.user.id}/${body.runId}/${stepId}`;
+        const isVariant = !!body.asVariant;
+        const key = isVariant
+            ? `${baseDir}/variant-${Date.now()}-${randomUUID()}.png`
+            : `${baseDir}.png`;
+
         await r2Put(key, out, "image/png");
 
-        await db.insert(schema.flowRunSteps).values({ runId: body.runId, stepId, r2Key: key, durationMs: Date.now() - start, model: body.model, prompt: body.prompt, temperature: body.temperature, createdAt: new Date() }).onConflictDoUpdate({ target: [schema.flowRunSteps.runId, schema.flowRunSteps.stepId], set: { r2Key: key, durationMs: Date.now() - start, model: body.model, prompt: body.prompt, temperature: body.temperature } });
+        if (!isVariant) {
+            await db
+                .insert(schema.flowRunSteps)
+                .values({
+                    runId: body.runId,
+                    stepId,
+                    r2Key: key,
+                    durationMs: Date.now() - start,
+                    model: body.model,
+                    prompt: body.prompt,
+                    temperature: body.temperature,
+                    createdAt: new Date(),
+                })
+                .onConflictDoUpdate({
+                    target: [schema.flowRunSteps.runId, schema.flowRunSteps.stepId],
+                    set: {
+                        r2Key: key,
+                        durationMs: Date.now() - start,
+                        model: body.model,
+                        prompt: body.prompt,
+                        temperature: body.temperature,
+                    },
+                });
+        }
 
         return NextResponse.json({ key, runId: body.runId, stepId });
     } catch (e) {
