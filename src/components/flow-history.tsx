@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
-import { Download, ArrowBigLeft } from "lucide-react";
+import { Download, ArrowBigLeft, ChevronsUpDown, ChevronsDownUp, Trash, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -263,13 +263,45 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                         const canExpand = r.itemsTotal > cols;
                                         if (!(isExpanded || canExpand)) return null;
                                         return (
-                                            <Button variant="secondary" disabled={expanding.has(r.runId)} onClick={() => toggleExpand(r.runId)}>
-                                                {isExpanded ? "收合" : expanding.has(r.runId) ? "讀取中…" : "展開"}
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="bg-white text-black border hover:bg-white/90"
+                                                disabled={expanding.has(r.runId)}
+                                                onClick={() => toggleExpand(r.runId)}
+                                                aria-label={isExpanded ? "收合" : "展開"}
+                                                title={isExpanded ? "收合" : "展開"}
+                                            >
+                                                {expanding.has(r.runId) ? (
+                                                    // 保留載入中文字避免誤導，但以簡短寬度顯示
+                                                    <span className="text-xs">…</span>
+                                                ) : isExpanded ? (
+                                                    <ChevronsDownUp className="h-4 w-4" />
+                                                ) : (
+                                                    <ChevronsUpDown className="h-4 w-4" />
+                                                )}
                                             </Button>
                                         );
                                     })()}
-                                    <Button variant="secondary" onClick={() => router.push(`/flows/${slug}?runId=${encodeURIComponent(r.runId)}`)}>返回</Button>
-                                    <Button variant="destructive" onClick={() => remove(r.runId)}>刪除</Button>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="bg-white text-black border hover:bg-white/90"
+                                        onClick={() => router.push(`/flows/${slug}?runId=${encodeURIComponent(r.runId)}`)}
+                                        aria-label="返回"
+                                        title="返回"
+                                    >
+                                        <RotateCcw className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        onClick={() => remove(r.runId)}
+                                        aria-label="刪除"
+                                        title="刪除"
+                                    >
+                                        <Trash className="h-4 w-4 text-white" />
+                                    </Button>
                                 </div>
                             </div>
                             {!expandedUI.has(r.runId) ? (
