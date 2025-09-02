@@ -340,8 +340,8 @@ export default function FlowHistory({ slug, flowName }: Props) {
                     ))}
                     {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
                     {hasMore ? (
-                        <div className="flex justify-center pt-2">
-                            <Button className="flex justify-center pt-2" disabled={loading} onClick={() => load(false)}>載入更多</Button>
+                        <div className="pt-2">
+                            <Button className="w-full" disabled={loading} onClick={() => load(false)}>載入更多</Button>
                         </div>
                     ) : null}
                 </div>
