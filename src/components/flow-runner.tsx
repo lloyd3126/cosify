@@ -65,6 +65,29 @@ export default function FlowRunner({ slug, flow }: Props) {
 
     const aspect = "9 / 16";
 
+    // 生成隊列（用於 Modal 預留卡位與狀態）
+    type GenStatus = "queued" | "running" | "done" | "error";
+    type GenEntry = { id: string; status: GenStatus; key?: string; temperature?: number; error?: string };
+    const [generationQueue, setGenerationQueue] = useState<Record<string, GenEntry[]>>({});
+    const stepOpSeqRef = useRef<Record<string, number>>({});
+    const nextOpId = (stepId: string) => {
+        const v = (stepOpSeqRef.current[stepId] || 0) + 1;
+        stepOpSeqRef.current[stepId] = v;
+        return v;
+    };
+    const isCurrentOp = (stepId: string, opId: number) => stepOpSeqRef.current[stepId] === opId;
+    const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    function queueAdd(stepId: string, entries: GenEntry[]) {
+        setGenerationQueue((prev) => ({ ...prev, [stepId]: [...(prev[stepId] || []), ...entries] }));
+    }
+    function queueUpdate(stepId: string, entryId: string, updater: (e: GenEntry) => GenEntry) {
+        setGenerationQueue((prev) => ({ ...prev, [stepId]: (prev[stepId] || []).map((e) => (e.id === entryId ? updater(e) : e)) }));
+    }
+    function queueClear(stepId: string) {
+        setGenerationQueue((prev) => { const n = { ...prev }; delete n[stepId]; return n; });
+    }
+
     // Confirm dialogs
     const [confirmRerun, setConfirmRerun] = useState<{ stepId: string | null }>({ stepId: null });
     const [confirmClear, setConfirmClear] = useState<{ stepId: string | null }>({ stepId: null });
@@ -236,6 +259,7 @@ export default function FlowRunner({ slug, flow }: Props) {
             invalidateFrom(id);
         } else if (step.type === "imgGenerator") {
             invalidateFrom(id);
+            queueClear(id);
         }
     }
 
@@ -326,9 +350,21 @@ export default function FlowRunner({ slug, flow }: Props) {
                                         }}
                                     >
                                         {loading[step.id] ? (
-                                            <div className="absolute inset-0 grid place-items-center">
-                                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
-                                            </div>
+                                            <>
+                                                <div className="absolute inset-0 grid place-items-center">
+                                                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                                </div>
+                                                {/* 載入中：底部全寬的已生成按鈕（可重開 Modal） */}
+                                                <div className="absolute inset-x-0 bottom-0 p-3 z-10">
+                                                    <Button
+                                                        className="w-full bg-black text-white hover:bg-black/90"
+                                                        onClick={(e) => { e.stopPropagation(); setOpenModalFor(step.id); }}
+                                                        aria-label="已生成"
+                                                    >
+                                                        <Grid3X3 className="h-4 w-4 text-white" />
+                                                    </Button>
+                                                </div>
+                                            </>
                                         ) : step.type === "imgGenerator" ? (
                                             keys[step.id] ? (
                                                 <>
@@ -353,10 +389,16 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                     e.stopPropagation();
                                                                     if (!runId) return;
                                                                     invalidateFrom(step.id);
+                                                                    // 先加入隊列占位（單次一張）
+                                                                    const entryId = uid();
+                                                                    queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
                                                                     setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                    const opId = nextOpId(step.id);
                                                                     (async () => {
                                                                         try {
                                                                             const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                                            // 標記為 running
+                                                                            queueUpdate(step.id, entryId, (e) => ({ ...e, status: "running" }));
                                                                             const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                                 method: "POST",
                                                                                 headers: { "Content-Type": "application/json" },
@@ -364,10 +406,14 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                             });
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                                            if (!isCurrentOp(step.id, opId)) return;
                                                                             setKeys((k) => ({ ...k, [step.id]: data.key }));
-                                                                            addCandidate(step.id, data.key);
+                                                                            queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key }));
+                                                                            void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                         } catch (err) {
-                                                                            toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                            const msg = err instanceof Error ? err.message : "生成失敗";
+                                                                            queueUpdate(step.id, entryId, (e) => ({ ...e, status: "error", error: msg }));
+                                                                            toast.error(msg);
                                                                         } finally {
                                                                             setLoading((s) => ({ ...s, [step.id]: false }));
                                                                         }
@@ -387,14 +433,20 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                     invalidateFrom(step.id);
                                                                     setOpenModalFor(step.id);
                                                                     setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                    const opId = nextOpId(step.id);
                                                                     (async () => {
                                                                         try {
                                                                             const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
                                                                             const temps = [0.0, 0.5, 1.0];
                                                                             let lastKey: string | null = null;
+                                                                            // 預先加入三個 queued 占位
+                                                                            const entries = temps.map((t) => ({ id: uid(), status: "queued" as const, temperature: t }));
+                                                                            queueAdd(step.id, entries);
                                                                             for (let i = 0; i < temps.length; i++) {
                                                                                 const t = temps[i];
-                                                                                const asVariant = true; // 全部存為變體，避免覆寫，同時可在 Modal 顯示 4 張
+                                                                                const asVariant = true; // 全部存為變體，避免覆寫
+                                                                                // 標記第 i 個為 running
+                                                                                queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "running" }));
                                                                                 const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                                     method: "POST",
                                                                                     headers: { "Content-Type": "application/json" },
@@ -402,12 +454,24 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                                 });
                                                                                 const data = await res.json();
                                                                                 if (!res.ok) throw new Error(data?.error || "生成失敗");
-                                                                                addCandidate(step.id, data.key);
+                                                                                if (!isCurrentOp(step.id, opId)) return;
+                                                                                queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key }));
+                                                                                void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                                 lastKey = data.key as string;
                                                                             }
                                                                             if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
                                                                         } catch (err) {
-                                                                            toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                            const msg = err instanceof Error ? err.message : "生成失敗";
+                                                                            // 標記所有未完成為 error
+                                                                            setGenerationQueue((prev) => {
+                                                                                const list = prev[step.id] || [];
+                                                                                const next = list.map((e): GenEntry => (e.status === "queued" || e.status === "running")
+                                                                                    ? { ...e, status: "error" as GenStatus, error: msg }
+                                                                                    : e
+                                                                                );
+                                                                                return { ...prev, [step.id]: next };
+                                                                            });
+                                                                            toast.error(msg);
                                                                         } finally {
                                                                             setLoading((s) => ({ ...s, [step.id]: false }));
                                                                         }
@@ -436,10 +500,15 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                             className="w-full"
                                                             onClick={() => {
                                                                 if (!runId) return;
+                                                                // 先加入隊列占位
+                                                                const entryId = uid();
+                                                                queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
                                                                 setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                const opId = nextOpId(step.id);
                                                                 (async () => {
                                                                     try {
                                                                         const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
+                                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "running" }));
                                                                         const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                             method: "POST",
                                                                             headers: { "Content-Type": "application/json" },
@@ -447,10 +516,14 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                         });
                                                                         const data = await res.json();
                                                                         if (!res.ok) throw new Error(data?.error || "生成失敗");
+                                                                        if (!isCurrentOp(step.id, opId)) return;
                                                                         setKeys((k) => ({ ...k, [step.id]: data.key }));
-                                                                        addCandidate(step.id, data.key);
+                                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key }));
+                                                                        void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                     } catch (err) {
-                                                                        toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                        const msg = err instanceof Error ? err.message : "生成失敗";
+                                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "error", error: msg }));
+                                                                        toast.error(msg);
                                                                     } finally {
                                                                         setLoading((s) => ({ ...s, [step.id]: false }));
                                                                     }
@@ -469,14 +542,18 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                 if (!runId) return;
                                                                 setOpenModalFor(step.id);
                                                                 setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                const opId = nextOpId(step.id);
                                                                 (async () => {
                                                                     try {
                                                                         const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
                                                                         const temps = [0.0, 0.5, 1.0];
                                                                         let lastKey: string | null = null;
+                                                                        const entries = temps.map((t) => ({ id: uid(), status: "queued" as const, temperature: t }));
+                                                                        queueAdd(step.id, entries);
                                                                         for (let i = 0; i < temps.length; i++) {
                                                                             const t = temps[i];
                                                                             const asVariant = true; // 全部存為變體，避免覆寫，同時可在 Modal 顯示 4 張
+                                                                            queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "running" }));
                                                                             const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                                 method: "POST",
                                                                                 headers: { "Content-Type": "application/json" },
@@ -484,12 +561,23 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                             });
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data?.error || "生成失敗");
-                                                                            addCandidate(step.id, data.key);
+                                                                            if (!isCurrentOp(step.id, opId)) return;
+                                                                            queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key }));
+                                                                            void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                             lastKey = data.key as string;
                                                                         }
                                                                         if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
                                                                     } catch (err) {
-                                                                        toast.error(err instanceof Error ? err.message : "生成失敗");
+                                                                        const msg = err instanceof Error ? err.message : "生成失敗";
+                                                                        setGenerationQueue((prev) => {
+                                                                            const list = prev[step.id] || [];
+                                                                            const next = list.map((e): GenEntry => (e.status === "queued" || e.status === "running")
+                                                                                ? { ...e, status: "error" as GenStatus, error: msg }
+                                                                                : e
+                                                                            );
+                                                                            return { ...prev, [step.id]: next };
+                                                                        });
+                                                                        toast.error(msg);
                                                                     } finally {
                                                                         setLoading((s) => ({ ...s, [step.id]: false }));
                                                                     }
@@ -514,6 +602,8 @@ export default function FlowRunner({ slug, flow }: Props) {
                                             <div className="absolute inset-0 grid place-items-center text-sm text-red-600">不支援的步驟類型</div>
                                         )}
                                     </Card>
+                                    {/* 常駐「已生成」按鈕（卡片下方） */}
+                                    {/* 移除卡片下方的常駐按鈕，僅在載入時顯示絕對定位的按鈕 */}
                                 </>
                             )}
                         </div>
@@ -628,23 +718,42 @@ export default function FlowRunner({ slug, flow }: Props) {
                         </div>
                         <div className="p-4 overflow-auto" style={{ maxHeight: "70vh" }}>
                             {(() => {
-                                const list = candidates[openModalFor] || [];
-                                if (list.length === 0) return <div className="text-sm text-muted-foreground">尚無生成結果</div>;
+                                const q = generationQueue[openModalFor] || [];
+                                const queueItems: Array<GenEntry> = q.length > 0
+                                    ? q
+                                    : (candidates[openModalFor] || []).map((k) => ({ id: k, status: "done" as const, key: k }));
+                                if (queueItems.length === 0) return <div className="text-sm text-muted-foreground">尚無生成結果</div>;
                                 const adopted = keys[openModalFor] || null;
                                 return (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                        {list.map((k) => (
-                                            <div key={k} className="group relative w-full overflow-hidden rounded-md border" style={{ aspectRatio: "9 / 16" }}>
-                                                <Image src={`/api/r2/${k}`} alt={openModalFor} fill className="object-cover" />
-                                                {adopted === k ? (
+                                        {queueItems.map((item) => (
+                                            <div key={item.id} className="group relative w-full overflow-hidden rounded-md border" style={{ aspectRatio: "9 / 16" }}>
+                                                {item.status === "done" && item.key ? (
+                                                    <Image src={`/api/r2/${item.key}`} alt={openModalFor} fill className="object-cover" />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background">
+                                                        {item.status === "running" ? (
+                                                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
+                                                        ) : (
+                                                            <div className="h-8 w-8 rounded-full border-2 border-dashed border-muted-foreground/30" />
+                                                        )}
+                                                        <div className="mt-2 text-xs text-muted-foreground">
+                                                            {item.status === "queued" ? "排隊中" : item.status === "running" ? "生成中" : item.status === "error" ? "失敗" : ""}
+                                                            {typeof item.temperature === "number" ? ` · T=${item.temperature}` : ""}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {item.status === "done" && item.key && adopted === item.key ? (
                                                     <div className="absolute left-2 top-2 rounded bg-emerald-600 text-white text-[11px] px-2 py-0.5">已採用</div>
                                                 ) : null}
-                                                <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <Button size="sm" onClick={() => { setKeys((s) => ({ ...s, [openModalFor]: k })); setOpenModalFor(null); }} aria-label="設為本步結果">採用</Button>
-                                                        <Button size="sm" variant="secondary" onClick={() => downloadByKey(k, openModalFor)} aria-label="下載">下載</Button>
+                                                {item.status === "done" && item.key ? (
+                                                    <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <Button size="sm" onClick={() => { setKeys((s) => ({ ...s, [openModalFor]: item.key! })); setOpenModalFor(null); }} aria-label="設為本步結果">採用</Button>
+                                                            <Button size="sm" variant="secondary" onClick={() => downloadByKey(item.key!, openModalFor)} aria-label="下載">下載</Button>
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                ) : null}
                                             </div>
                                         ))}
                                     </div>
@@ -652,7 +761,11 @@ export default function FlowRunner({ slug, flow }: Props) {
                             })()}
                         </div>
                         <div className="flex items-center justify-between p-4 border-t text-sm text-muted-foreground">
-                            <div>已生成 {(candidates[openModalFor]?.length ?? 0)} 張</div>
+                            {(() => {
+                                const q = generationQueue[openModalFor] || [];
+                                const count = q.length > 0 ? q.length : (candidates[openModalFor]?.length ?? 0);
+                                return <div>已生成 {count} 張</div>;
+                            })()}
                         </div>
                     </div>
                 </div>
