@@ -1,5 +1,48 @@
 {
     "flows": {
+        "55DB89F1-A1E6-4033-BD39-1D187C82372F": {
+            "name": "角色扮演照",
+            "slug": "cosplay-generation",
+            "metadata": {
+                "description": "上傳角色圖後生成該角色的扮演照",
+                "thumbnail": "/vercel.svg",
+                "visibility": "public"
+            },
+            "steps": [
+                {
+                    "id": "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A",
+                    "name": "上傳想生成的角色",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "19695F27-8DDB-446C-895D-B11A980508BE",
+                    "name": "生成角色設定圖",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate the character design sheet without any background.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
+                        ]
+                    }
+                },
+                {
+                    "id": "41A6794D-77C6-4579-9FFB-F9F48E017D49",
+                    "name": "生成角色扮演圖",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Generate a realistic photo of a realistic cosplayer cosplaying the illustration in Comiket. The cosplayer should have a similar pose and expression as the character in the illustration.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "19695F27-8DDB-446C-895D-B11A980508BE"
+                        ]
+                    }
+                }
+            ]
+        },
         "5007B1CF-7EFC-4C29-B976-080BA7D5D644": {
             "name": "我也想當 cosplayer",
             "slug": "cosplay-selfie-generation-1",
@@ -162,49 +205,6 @@
                             "F4E2F867-E233-400C-9ECB-DCF6DFC48F03",
                             "ECD5745B-965D-498F-BC96-BBF0ABBFE6C8",
                             "AA7B8A1D-21C6-47A0-91E3-969EF7E66258"
-                        ]
-                    }
-                }
-            ]
-        },
-        "55DB89F1-A1E6-4033-BD39-1D187C82372F": {
-            "name": "生成角色扮演照",
-            "slug": "cosplay-generation",
-            "metadata": {
-                "description": "上傳角色圖後生成該角色的扮演照",
-                "thumbnail": "/vercel.svg",
-                "visibility": "public"
-            },
-            "steps": [
-                {
-                    "id": "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A",
-                    "name": "上傳想生成的角色",
-                    "type": "uploader",
-                    "data": {}
-                },
-                {
-                    "id": "19695F27-8DDB-446C-895D-B11A980508BE",
-                    "name": "生成角色設定圖",
-                    "type": "imgGenerator",
-                    "data": {
-                        "model": "gemini-2.5-flash-image-preview",
-                        "prompt": "Generate the character design sheet without any background.",
-                        "temperature": 1,
-                        "referenceImgs": [
-                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
-                        ]
-                    }
-                },
-                {
-                    "id": "41A6794D-77C6-4579-9FFB-F9F48E017D49",
-                    "name": "生成角色扮演圖",
-                    "type": "imgGenerator",
-                    "data": {
-                        "model": "gemini-2.5-flash-image-preview",
-                        "prompt": "Generate a realistic photo of a realistic cosplayer cosplaying the illustration in Comiket. The cosplayer should have a similar pose and expression as the character in the illustration.",
-                        "temperature": 1,
-                        "referenceImgs": [
-                            "19695F27-8DDB-446C-895D-B11A980508BE"
                         ]
                     }
                 }
