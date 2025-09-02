@@ -29,7 +29,8 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ slug: st
         }
     }
 
-    // 刪 DB：先 steps 再 run
+    // 刪 DB：先 assets -> steps -> run
+    await db.delete(schema.flowRunStepAssets).where(eq(schema.flowRunStepAssets.runId, runId));
     await db.delete(schema.flowRunSteps).where(eq(schema.flowRunSteps.runId, runId));
     await db.delete(schema.flowRuns).where(eq(schema.flowRuns.runId, runId));
 

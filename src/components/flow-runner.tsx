@@ -145,8 +145,39 @@ export default function FlowRunner({ slug, flow }: Props) {
                 toast.error(e instanceof Error ? e.message : "建立執行失敗");
             }
         })();
-        return () => { cancelled = true; };
+        return () => {
+            // 元件卸載時嘗試條件清理：若未生成任何圖片就移除 run
+            if (runId) {
+                const url = `/api/flows/${slug}/runs/${encodeURIComponent(runId)}/cleanup-if-empty`;
+                try {
+                    const blob = new Blob([JSON.stringify({})], { type: "application/json" });
+                    navigator.sendBeacon?.(url, blob);
+                } catch {
+                    // 後備方案：fire-and-forget
+                    fetch(url, { method: "POST" }).catch(() => { });
+                }
+            }
+            cancelled = true;
+        };
     }, [slug]);
+
+    // 頁面關閉/導航時也嘗試清理
+    useEffect(() => {
+        if (!runId) return;
+        const handler = () => {
+            try {
+                const url = `/api/flows/${slug}/runs/${encodeURIComponent(runId)}/cleanup-if-empty`;
+                const blob = new Blob([JSON.stringify({})], { type: "application/json" });
+                navigator.sendBeacon?.(url, blob);
+            } catch { }
+        };
+        window.addEventListener("pagehide", handler);
+        window.addEventListener("beforeunload", handler);
+        return () => {
+            window.removeEventListener("pagehide", handler);
+            window.removeEventListener("beforeunload", handler);
+        };
+    }, [runId, slug]);
 
     // 使用共用 HorizontalCarousel 取代內建輪播
 
