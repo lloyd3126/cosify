@@ -74,7 +74,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
 
     // 生成隊列（用於 Modal 預留卡位與狀態）
     type GenStatus = "queued" | "running" | "done" | "error";
-    type GenEntry = { id: string; status: GenStatus; key?: string; temperature?: number; error?: string };
+    type GenEntry = { id: string; status: GenStatus; key?: string; temperature?: number; error?: string; doneAt?: number; createdAt?: string };
     const [generationQueue, setGenerationQueue] = useState<Record<string, GenEntry[]>>({});
     // DB 資產（done）
     type StepAsset = { id: string; r2Key: string; temperature: number | null; createdAt?: string };
@@ -610,7 +610,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                             if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                                             if (!isCurrentOp(step.id, opId)) return;
                                                                             setKeys((k) => ({ ...k, [step.id]: data.key }));
-                                                                            queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key }));
+                                                                            queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                                             // 採用新結果後，僅讓下游失效
                                                                             invalidateDependents(step.id);
                                                                             void ensureBlobUrlForKey(data.key).catch(() => { });
@@ -658,7 +658,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                                 const data = await res.json();
                                                                                 if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                                                 if (!isCurrentOp(step.id, opId)) return;
-                                                                                queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key }));
+                                                                                queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                                                 void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                                 lastKey = data.key as string;
                                                                             }
@@ -960,21 +960,25 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                 // 合併 done（DB 與 Queue）並以 key 去重，確保 queue 的 done 立即可見
                                 const doneMap = new Map<string, GenEntry>();
                                 for (const a of db) {
-                                    doneMap.set(a.r2Key, { id: a.id, status: "done", key: a.r2Key, temperature: a.temperature ?? undefined });
+                                    doneMap.set(a.r2Key, { id: a.id, status: "done", key: a.r2Key, temperature: a.temperature ?? undefined, createdAt: a.createdAt });
                                 }
                                 for (const e of q) {
                                     if (e.status === "done" && e.key) {
                                         if (!doneMap.has(e.key)) doneMap.set(e.key, e);
                                     }
                                 }
+                                // 若目前採用的 key 不在 DB/Queue 中，補入，避免舊圖在 3x 生成時短暫消失
+                                const adoptedKeyNow = keys[stepId] || null;
+                                if (typeof adoptedKeyNow === "string" && adoptedKeyNow && !doneMap.has(adoptedKeyNow)) {
+                                    // 使用目前時間作為補入項的 doneAt，讓排序穩定
+                                    doneMap.set(adoptedKeyNow, { id: `adopted-${stepId}`, status: "done", key: adoptedKeyNow, doneAt: Date.now() });
+                                }
                                 let doneMerged = Array.from(doneMap.values());
-                                // 依穩定順序排序（先出現者在前），未知者置後但保持相對順序
-                                const order = stepOrder[stepId] || [];
-                                const idxMap = new Map(order.map((k, i) => [k, i] as const));
+                                // 依時間排序由舊到新：DB 項用 createdAt，Queue 項用 doneAt
                                 doneMerged.sort((a, b) => {
-                                    const ai = a.key ? (idxMap.get(a.key) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
-                                    const bi = b.key ? (idxMap.get(b.key) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
-                                    return ai - bi;
+                                    const ta = a.createdAt ? new Date(a.createdAt).getTime() : (a.doneAt ?? Number.MAX_SAFE_INTEGER);
+                                    const tb = b.createdAt ? new Date(b.createdAt).getTime() : (b.doneAt ?? Number.MAX_SAFE_INTEGER);
+                                    return ta - tb;
                                 });
                                 const nonDoneFromQueue = q.filter((e) => e.status !== "done");
                                 const queueItems: Array<GenEntry> = [...doneMerged, ...nonDoneFromQueue];
@@ -1094,6 +1098,8 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                 const doneSet = new Set<string>();
                                 for (const a of db) doneSet.add(a.r2Key);
                                 for (const e of q) if (e.status === "done" && e.key) doneSet.add(e.key);
+                                const adoptedKeyNow = keys[stepId] || null;
+                                if (typeof adoptedKeyNow === "string" && adoptedKeyNow) doneSet.add(adoptedKeyNow);
                                 const count = doneSet.size;
                                 return <div>已生成 {count} 張{assetsLoading[stepId] ? " · 載入中" : ""}</div>;
                             })()}
@@ -1131,7 +1137,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                         if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                         if (!isCurrentOp(step.id, opId)) return;
                                                         setKeys((k) => ({ ...k, [step.id]: data.key }));
-                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key }));
+                                                        queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                         // 採用新結果後，僅讓下游失效
                                                         invalidateDependents(step.id);
                                                         void ensureBlobUrlForKey(data.key).catch(() => { });
@@ -1180,7 +1186,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                             const data = await res.json();
                                                             if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                             if (!isCurrentOp(step.id, opId)) return;
-                                                            queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key }));
+                                                            queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                             void ensureBlobUrlForKey(data.key).catch(() => { });
                                                             lastKey = data.key as string;
                                                         }
