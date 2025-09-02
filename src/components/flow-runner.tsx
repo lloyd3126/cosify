@@ -6,9 +6,9 @@ import UploadCard from "@/components/ui/upload-card";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Toaster, toast } from "sonner";
-import { Download, X, WandSparkles, Grid3X3, BookmarkCheck, List, History } from "lucide-react";
+import { Download, X, WandSparkles, Grid3X3, BookmarkCheck, List, History, FilePlus2 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
 import Lightbox from "@/components/ui/lightbox";
@@ -17,6 +17,7 @@ type Props = { slug: string; flow: Flow; runIdFromUrl?: string | null; hasHistor
 
 export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Props) {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const debugMode = (searchParams?.get("debug") || "").toLowerCase() === "true";
     const [runId, setRunId] = useState<string | null>(null);
     const runIdRef = useRef<string | null>(null);
@@ -505,6 +506,16 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                     >
                         <List className="h-4 w-4" />
                     </Link>
+                    {/* 開起新的任務：導向 /flows/[slug]/new 建立 run 後再 redirect */}
+                    <button
+                        type="button"
+                        className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
+                        aria-label="開起新的任務"
+                        onClick={() => router.push(`/flows/${encodeURIComponent(slug)}/new`)}
+                        title="開起新的任務"
+                    >
+                        <FilePlus2 className="h-4 w-4" />
+                    </button>
                     {hasHistory ? (
                         <Link
                             href={`/flows/${encodeURIComponent(slug)}/history`}
@@ -610,6 +621,8 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (!runId) return;
+                                                                    // 與 3x 生成一致：點擊即開啟候選 Modal
+                                                                    setOpenModalFor(step.id);
                                                                     const autoAdopt = !keys[step.id];
                                                                     // 先加入隊列占位（單次一張）
                                                                     const entryId = uid();
@@ -736,6 +749,8 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                             className="w-full"
                                                             onClick={() => {
                                                                 if (!runId) return;
+                                                                // 與 3x 生成一致：點擊即開啟候選 Modal
+                                                                setOpenModalFor(step.id);
                                                                 // 先加入隊列占位
                                                                 const entryId = uid();
                                                                 queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
