@@ -6,7 +6,7 @@ import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
-import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, Trash, RotateCcw } from "lucide-react";
+import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, Trash, ArchiveRestore } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -257,9 +257,9 @@ export default function FlowHistory({ slug, flowName }: Props) {
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
                 <div className="space-y-4">
                     {runs.map((r) => (
-                        <Card key={r.runId} className="p-4 space-y-3 rounded-md">
-                            <div className="flex items-center justify-between">
-                                <div className="text-sm text-muted-foreground">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
+                        <Card key={r.runId} className="p-4 space-y-3 rounded-md gap-3">
+                            <div className="flex items-center justify-between m-0">
+                                <div className="text-sm text-black">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
                                 <div className="flex items-center gap-2">
                                     {(() => {
                                         const isExpanded = expandedUI.has(r.runId);
@@ -294,16 +294,17 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                         aria-label="返回"
                                         title="返回"
                                     >
-                                        <RotateCcw className="h-4 w-4" />
+                                        <ArchiveRestore className="h-4 w-4" />
                                     </Button>
                                     <Button
-                                        variant="destructive"
+                                        variant="outline"
                                         size="icon"
+                                        className="bg-white text-black border hover:bg-white/90"
                                         onClick={() => setConfirmDelete({ runId: r.runId })}
                                         aria-label="刪除"
                                         title="刪除"
                                     >
-                                        <Trash className="h-4 w-4 text-white" />
+                                        <Trash className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
