@@ -91,6 +91,17 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
     const isCurrentOp = (stepId: string, opId: number) => stepOpSeqRef.current[stepId] === opId;
     const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+    // 本會話曾經採用過但可能尚未出現在 DB/Queue 的舊圖，避免切換採用後在 Modal 暫時消失
+    const [adoptedHistory, setAdoptedHistory] = useState<Record<string, Array<{ key: string; addedAt: number }>>>({});
+    function rememberOldAdopted(stepId: string, oldKey: string | null | undefined, newKey: string | null | undefined) {
+        if (!oldKey || !newKey || oldKey === newKey) return;
+        setAdoptedHistory((prev) => {
+            const arr = prev[stepId] ? [...prev[stepId]] : [];
+            if (!arr.some((x) => x.key === oldKey)) arr.push({ key: oldKey, addedAt: Date.now() });
+            return { ...prev, [stepId]: arr };
+        });
+    }
+
     function queueAdd(stepId: string, entries: GenEntry[]) {
         setGenerationQueue((prev) => ({ ...prev, [stepId]: [...(prev[stepId] || []), ...entries] }));
     }
@@ -609,7 +620,10 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                                             if (!isCurrentOp(step.id, opId)) return;
-                                                                            setKeys((k) => ({ ...k, [step.id]: data.key }));
+                                                                            setKeys((k) => {
+                                                                                rememberOldAdopted(step.id, k[step.id], data.key);
+                                                                                return { ...k, [step.id]: data.key };
+                                                                            });
                                                                             queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                                             // 採用新結果後，僅讓下游失效
                                                                             invalidateDependents(step.id);
@@ -663,7 +677,10 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                                 lastKey = data.key as string;
                                                                             }
                                                                             if (lastKey) {
-                                                                                setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                                                setKeys((k) => {
+                                                                                    rememberOldAdopted(step.id, k[step.id], lastKey);
+                                                                                    return { ...k, [step.id]: lastKey };
+                                                                                });
                                                                                 // 採用新結果後，僅讓下游失效
                                                                                 invalidateDependents(step.id);
                                                                             }
@@ -967,15 +984,23 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                         if (!doneMap.has(e.key)) doneMap.set(e.key, e);
                                     }
                                 }
-                                // 若目前採用的 key 不在 DB/Queue 中，補入，避免舊圖在 3x 生成時短暫消失
+                                // 補入本會話記錄的舊採用 key（避免切換採用後短暫不在 DB/Queue 時消失）
+                                const historyList = adoptedHistory[stepId] || [];
+                                for (const h of historyList) {
+                                    if (!doneMap.has(h.key)) doneMap.set(h.key, { id: `adopted-history-${h.key}`, status: "done", key: h.key, doneAt: h.addedAt });
+                                }
+                                // 若目前採用的 key 不在 DB/Queue/歷史中，補入
                                 const adoptedKeyNow = keys[stepId] || null;
                                 if (typeof adoptedKeyNow === "string" && adoptedKeyNow && !doneMap.has(adoptedKeyNow)) {
                                     // 使用目前時間作為補入項的 doneAt，讓排序穩定
                                     doneMap.set(adoptedKeyNow, { id: `adopted-${stepId}`, status: "done", key: adoptedKeyNow, doneAt: Date.now() });
                                 }
                                 let doneMerged = Array.from(doneMap.values());
-                                // 依時間排序由舊到新：DB 項用 createdAt，Queue 項用 doneAt
+                                // 先以來源權重排序（DB 在前，其餘在後），同群再依時間由舊到新
                                 doneMerged.sort((a, b) => {
+                                    const wa = a.createdAt ? 0 : 1; // DB 有 createdAt
+                                    const wb = b.createdAt ? 0 : 1;
+                                    if (wa !== wb) return wa - wb;
                                     const ta = a.createdAt ? new Date(a.createdAt).getTime() : (a.doneAt ?? Number.MAX_SAFE_INTEGER);
                                     const tb = b.createdAt ? new Date(b.createdAt).getTime() : (b.doneAt ?? Number.MAX_SAFE_INTEGER);
                                     return ta - tb;
@@ -1034,8 +1059,11 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                             e.stopPropagation();
                                                                             const sid = stepId;
                                                                             const key = item.key!;
-                                                                            // 立即更新 UI
-                                                                            setKeys((s) => ({ ...s, [sid]: key }));
+                                                                            // 立即更新 UI，並記錄舊採用項
+                                                                            setKeys((s) => {
+                                                                                rememberOldAdopted(sid, s[sid], key);
+                                                                                return { ...s, [sid]: key };
+                                                                            });
                                                                             setOpenModalFor(null);
                                                                             // 以 item.id 當作 assetId（若為 DB 來源）
                                                                             const assetId = item.id;
@@ -1136,7 +1164,10 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                         const data = await res.json();
                                                         if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                         if (!isCurrentOp(step.id, opId)) return;
-                                                        setKeys((k) => ({ ...k, [step.id]: data.key }));
+                                                        setKeys((k) => {
+                                                            rememberOldAdopted(step.id, k[step.id], data.key);
+                                                            return { ...k, [step.id]: data.key };
+                                                        });
                                                         queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                         // 採用新結果後，僅讓下游失效
                                                         invalidateDependents(step.id);
@@ -1191,7 +1222,10 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                             lastKey = data.key as string;
                                                         }
                                                         if (lastKey) {
-                                                            setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                            setKeys((k) => {
+                                                                rememberOldAdopted(step.id, k[step.id], lastKey);
+                                                                return { ...k, [step.id]: lastKey };
+                                                            });
                                                             // 採用新結果後，僅讓下游失效
                                                             invalidateDependents(step.id);
                                                         }
