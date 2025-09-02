@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
-import { Download, ArrowBigLeft, ChevronsUpDown, ChevronsDownUp, Trash, RotateCcw } from "lucide-react";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
+import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, Trash, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -31,6 +32,8 @@ export default function FlowHistory({ slug, flowName }: Props) {
     const [lbKeys, setLbKeys] = useState<string[]>([]);
     const [lbIndex, setLbIndex] = useState(0);
     const [lbSrc, setLbSrc] = useState<string | null>(null); // 使用本地 blob URL，避免重複下載
+    // 刪除確認對話框
+    const [confirmDelete, setConfirmDelete] = useState<{ runId: string | null }>({ runId: null });
 
     // 簡單的 blob URL 快取：r2Key -> objectURL；並去重並行請求
     const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
@@ -128,7 +131,6 @@ export default function FlowHistory({ slug, flowName }: Props) {
     }, [slug]);
 
     async function remove(runId: string) {
-        if (!confirm("確定刪除這次執行的所有產物？此動作無法復原。")) return;
         try {
             const res = await fetch(`/api/flows/${slug}/history/${runId}`, { method: "DELETE" });
             const data = await res.json();
@@ -139,6 +141,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
             setExpanded((m) => { const n = { ...m }; delete n[runId]; return n; });
             setExpandedUI((prev) => { const n = new Set(prev); n.delete(runId); return n; });
             setExpanding((prev) => { const n = new Set(prev); n.delete(runId); return n; });
+            setConfirmDelete({ runId: null });
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "刪除失敗");
         }
@@ -245,7 +248,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                             className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
                             aria-label="返回"
                         >
-                            <ArrowBigLeft className="h-5 w-5" />
+                            <ArrowLeftFromLine className="h-5 w-5" />
                         </Link>
                     </div>
                 ) : (
@@ -296,7 +299,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                     <Button
                                         variant="destructive"
                                         size="icon"
-                                        onClick={() => remove(r.runId)}
+                                        onClick={() => setConfirmDelete({ runId: r.runId })}
                                         aria-label="刪除"
                                         title="刪除"
                                     >
@@ -411,6 +414,16 @@ export default function FlowHistory({ slug, flowName }: Props) {
                 }}
                 canPrev={lbIndex > 0}
                 canNext={lbIndex < lbKeys.length - 1}
+            />
+            {/* 刪除確認對話框 */}
+            <ConfirmDialog
+                open={!!confirmDelete.runId}
+                title="刪除這次執行？"
+                description="此動作無法復原，將刪除這次執行的所有產物。"
+                confirmText="刪除"
+                cancelText="取消"
+                onCancel={() => setConfirmDelete({ runId: null })}
+                onConfirm={() => { const id = confirmDelete.runId; if (id) void remove(id); }}
             />
         </>
     );
