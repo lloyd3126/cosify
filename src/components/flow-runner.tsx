@@ -6,6 +6,7 @@ import UploadCard from "@/components/ui/upload-card";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Toaster, toast } from "sonner";
 import { Download, X, WandSparkles, Grid3X3, BookmarkCheck, List, History } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
@@ -15,6 +16,8 @@ import Lightbox from "@/components/ui/lightbox";
 type Props = { slug: string; flow: Flow; runIdFromUrl?: string | null; hasHistory?: boolean };
 
 export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Props) {
+    const searchParams = useSearchParams();
+    const debugMode = (searchParams?.get("debug") || "").toLowerCase() === "true";
     const [runId, setRunId] = useState<string | null>(null);
     const runIdRef = useRef<string | null>(null);
     useEffect(() => { runIdRef.current = runId; }, [runId]);
@@ -71,10 +74,15 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
     useEffect(() => () => { (Object.values(uploaderUrlsRef.current) as string[]).forEach((u) => { try { URL.revokeObjectURL(u); } catch { } }); }, []);
 
     const aspect = "9 / 16";
+    const formatTs = (ms: number) => {
+        const d = new Date(ms);
+        const pad = (n: number) => n.toString().padStart(2, "0");
+        return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
 
     // 生成隊列（用於 Modal 預留卡位與狀態）
     type GenStatus = "queued" | "running" | "done" | "error";
-    type GenEntry = { id: string; status: GenStatus; key?: string; temperature?: number; error?: string; doneAt?: number; createdAt?: string };
+    type GenEntry = { id: string; status: GenStatus; key?: string; temperature?: number; error?: string; doneAt?: number; createdAt?: string; source?: "db" | "queue" | "adopted" };
     const [generationQueue, setGenerationQueue] = useState<Record<string, GenEntry[]>>({});
     // DB 資產（done）
     type StepAsset = { id: string; r2Key: string; temperature: number | null; createdAt?: string };
@@ -602,6 +610,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (!runId) return;
+                                                                    const autoAdopt = !keys[step.id];
                                                                     // 先加入隊列占位（單次一張）
                                                                     const entryId = uid();
                                                                     queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
@@ -620,13 +629,15 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                                             if (!isCurrentOp(step.id, opId)) return;
-                                                                            setKeys((k) => {
-                                                                                rememberOldAdopted(step.id, k[step.id], data.key);
-                                                                                return { ...k, [step.id]: data.key };
-                                                                            });
+                                                                            if (autoAdopt) {
+                                                                                setKeys((k) => {
+                                                                                    rememberOldAdopted(step.id, k[step.id], data.key);
+                                                                                    return { ...k, [step.id]: data.key };
+                                                                                });
+                                                                            }
                                                                             queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
-                                                                            // 採用新結果後，僅讓下游失效
-                                                                            invalidateDependents(step.id);
+                                                                            // 僅在自動採用時才使下游失效
+                                                                            if (autoAdopt) invalidateDependents(step.id);
                                                                             void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                         } catch (err) {
                                                                             const msg = err instanceof Error ? err.message : "生成失敗";
@@ -650,12 +661,13 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                     if (!runId) return;
                                                                     setOpenModalFor(step.id);
                                                                     setLoading((s) => ({ ...s, [step.id]: true }));
+                                                                    const autoAdopt = !keys[step.id];
                                                                     const opId = nextOpId(step.id);
                                                                     (async () => {
                                                                         try {
                                                                             const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
                                                                             const temps = [0.0, 0.5, 1.0];
-                                                                            let lastKey: string | null = null;
+                                                                            let firstKey: string | null = null;
                                                                             // 預先加入三個 queued 占位
                                                                             const entries = temps.map((t) => ({ id: uid(), status: "queued" as const, temperature: t }));
                                                                             queueAdd(step.id, entries);
@@ -674,12 +686,12 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                                 if (!isCurrentOp(step.id, opId)) return;
                                                                                 queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                                                 void ensureBlobUrlForKey(data.key).catch(() => { });
-                                                                                lastKey = data.key as string;
+                                                                                if (!firstKey) firstKey = data.key as string;
                                                                             }
-                                                                            if (lastKey) {
+                                                                            if (firstKey && autoAdopt) {
                                                                                 setKeys((k) => {
-                                                                                    rememberOldAdopted(step.id, k[step.id], lastKey);
-                                                                                    return { ...k, [step.id]: lastKey };
+                                                                                    rememberOldAdopted(step.id, k[step.id], firstKey);
+                                                                                    return { ...k, [step.id]: firstKey };
                                                                                 });
                                                                                 // 採用新結果後，僅讓下游失效
                                                                                 invalidateDependents(step.id);
@@ -758,7 +770,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                         >
                                                             <WandSparkles className="h-4 w-4" />
                                                         </Button>
-                                                        {/* 3x 生成（初次；三張皆為變體，最後一張採用） */}
+                                                        {/* 3x 生成（初次；三張皆為變體，第一張完成即採用） */}
                                                         <Button
                                                             className="w-full"
                                                             disabled={!refsReady(step) || isChainBusy(step.id)}
@@ -771,7 +783,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                     try {
                                                                         const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
                                                                         const temps = [0.0, 0.5, 1.0];
-                                                                        let lastKey: string | null = null;
+                                                                        let firstKey: string | null = null; // 第一張完成的 key
                                                                         const entries = temps.map((t) => ({ id: uid(), status: "queued" as const, temperature: t }));
                                                                         queueAdd(step.id, entries);
                                                                         for (let i = 0; i < temps.length; i++) {
@@ -788,9 +800,12 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                             if (!isCurrentOp(step.id, opId)) return;
                                                                             queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key }));
                                                                             void ensureBlobUrlForKey(data.key).catch(() => { });
-                                                                            lastKey = data.key as string;
+                                                                            // 第一張完成時即採用
+                                                                            if (!firstKey) {
+                                                                                firstKey = data.key as string;
+                                                                                setKeys((k) => ({ ...k, [step.id]: firstKey! }));
+                                                                            }
                                                                         }
-                                                                        if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
                                                                     } catch (err) {
                                                                         const msg = err instanceof Error ? err.message : "生成失敗";
                                                                         setGenerationQueue((prev) => {
@@ -977,33 +992,46 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                 // 合併 done（DB 與 Queue）並以 key 去重，確保 queue 的 done 立即可見
                                 const doneMap = new Map<string, GenEntry>();
                                 for (const a of db) {
-                                    doneMap.set(a.r2Key, { id: a.id, status: "done", key: a.r2Key, temperature: a.temperature ?? undefined, createdAt: a.createdAt });
+                                    doneMap.set(a.r2Key, { id: a.id, status: "done", key: a.r2Key, temperature: a.temperature ?? undefined, createdAt: a.createdAt, source: "db" });
                                 }
                                 for (const e of q) {
                                     if (e.status === "done" && e.key) {
-                                        if (!doneMap.has(e.key)) doneMap.set(e.key, e);
+                                        if (!doneMap.has(e.key)) doneMap.set(e.key, { ...e, source: "queue" });
                                     }
                                 }
                                 // 補入本會話記錄的舊採用 key（避免切換採用後短暫不在 DB/Queue 時消失）
                                 const historyList = adoptedHistory[stepId] || [];
                                 for (const h of historyList) {
-                                    if (!doneMap.has(h.key)) doneMap.set(h.key, { id: `adopted-history-${h.key}`, status: "done", key: h.key, doneAt: h.addedAt });
+                                    if (!doneMap.has(h.key)) {
+                                        const dbAsset = db.find((a) => a.r2Key === h.key);
+                                        doneMap.set(h.key, {
+                                            id: `adopted-history-${h.key}`,
+                                            status: "done",
+                                            key: h.key,
+                                            doneAt: h.addedAt,
+                                            createdAt: dbAsset?.createdAt,
+                                            source: "adopted",
+                                        });
+                                    }
                                 }
                                 // 若目前採用的 key 不在 DB/Queue/歷史中，補入
                                 const adoptedKeyNow = keys[stepId] || null;
                                 if (typeof adoptedKeyNow === "string" && adoptedKeyNow && !doneMap.has(adoptedKeyNow)) {
                                     // 使用目前時間作為補入項的 doneAt，讓排序穩定
-                                    doneMap.set(adoptedKeyNow, { id: `adopted-${stepId}`, status: "done", key: adoptedKeyNow, doneAt: Date.now() });
+                                    doneMap.set(adoptedKeyNow, { id: `adopted-${stepId}`, status: "done", key: adoptedKeyNow, doneAt: Date.now(), source: "adopted" });
                                 }
                                 let doneMerged = Array.from(doneMap.values());
-                                // 先以來源權重排序（DB 在前，其餘在後），同群再依時間由舊到新
+                                // 以來源權重排序（adopted:0, db:1, queue:2）；另外「目前已採用的 key」一律視為權重 0
                                 doneMerged.sort((a, b) => {
-                                    const wa = a.createdAt ? 0 : 1; // DB 有 createdAt
-                                    const wb = b.createdAt ? 0 : 1;
+                                    const isCurr = (e: typeof a) => (typeof adoptedKeyNow === "string" && adoptedKeyNow && e.key === adoptedKeyNow);
+                                    const weight = (e: typeof a) => (isCurr(e) || e.source === "adopted" ? 0 : e.source === "db" ? 1 : 2);
+                                    const wa = weight(a);
+                                    const wb = weight(b);
                                     if (wa !== wb) return wa - wb;
-                                    const ta = a.createdAt ? new Date(a.createdAt).getTime() : (a.doneAt ?? Number.MAX_SAFE_INTEGER);
-                                    const tb = b.createdAt ? new Date(b.createdAt).getTime() : (b.doneAt ?? Number.MAX_SAFE_INTEGER);
-                                    return ta - tb;
+                                    const timeFor = (e: typeof a) => (e.source === "db"
+                                        ? (e.createdAt ? new Date(e.createdAt).getTime() : Number.MAX_SAFE_INTEGER)
+                                        : (e.doneAt ?? Number.MAX_SAFE_INTEGER));
+                                    return timeFor(a) - timeFor(b);
                                 });
                                 const nonDoneFromQueue = q.filter((e) => e.status !== "done");
                                 const queueItems: Array<GenEntry> = [...doneMerged, ...nonDoneFromQueue];
@@ -1042,6 +1070,19 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                         </div>
                                                     </div>
                                                 )}
+                                                {debugMode && item.status === "done" ? (
+                                                    <div className="absolute inset-x-0 bottom-0 bg-black/60 text-[10px] text-white text-center py-0.5">
+                                                        {(() => {
+                                                            // 依來源顯示時間：DB 用 createdAt；queue/adopted 用 doneAt/addedAt；缺漏顯示破折號
+                                                            const t = item.source === "db"
+                                                                ? (item.createdAt ? new Date(item.createdAt).getTime() : undefined)
+                                                                : (item.doneAt ?? undefined);
+                                                            const timeStr = t ? formatTs(t) : "—";
+                                                            const src = item.source ?? "?";
+                                                            return `${timeStr} [${src}]`;
+                                                        })()}
+                                                    </div>
+                                                ) : null}
                                                 {item.status === "done" && item.key && adopted === item.key ? (
                                                     <div className="absolute left-2 top-2 z-10 rounded bg-emerald-600 text-white p-1" aria-label="已採用">
                                                         <BookmarkCheck className="h-4 w-4 text-white" />
@@ -1150,6 +1191,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                 const entryId = uid();
                                                 queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
                                                 setLoading((s) => ({ ...s, [step.id]: true }));
+                                                const autoAdopt = !keys[step.id];
                                                 const opId = nextOpId(step.id);
                                                 (async () => {
                                                     try {
@@ -1164,13 +1206,15 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                         const data = await res.json();
                                                         if (!res.ok) throw new Error(data?.error || "生成失敗");
                                                         if (!isCurrentOp(step.id, opId)) return;
-                                                        setKeys((k) => {
-                                                            rememberOldAdopted(step.id, k[step.id], data.key);
-                                                            return { ...k, [step.id]: data.key };
-                                                        });
+                                                        if (autoAdopt) {
+                                                            setKeys((k) => {
+                                                                rememberOldAdopted(step.id, k[step.id], data.key);
+                                                                return { ...k, [step.id]: data.key };
+                                                            });
+                                                        }
                                                         queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
-                                                        // 採用新結果後，僅讓下游失效
-                                                        invalidateDependents(step.id);
+                                                        // 僅在自動採用時才使下游失效
+                                                        if (autoAdopt) invalidateDependents(step.id);
                                                         void ensureBlobUrlForKey(data.key).catch(() => { });
                                                     } catch (err) {
                                                         const msg = err instanceof Error ? err.message : "生成失敗";
@@ -1195,12 +1239,13 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                 if (!runId) return;
                                                 // 與卡片一致：保留本步結果，待採用新結果後使下游失效
                                                 setLoading((s) => ({ ...s, [step.id]: true }));
+                                                const autoAdopt = !keys[step.id];
                                                 const opId = nextOpId(step.id);
                                                 (async () => {
                                                     try {
                                                         const refs = step.data.referenceImgs.map((r) => keys[r]).filter((k): k is string => !!k);
                                                         const temps = [0.0, 0.5, 1.0];
-                                                        let lastKey: string | null = null;
+                                                        let firstKey: string | null = null;
                                                         // 預先加入三個 queued 占位
                                                         const entries = temps.map((t) => ({ id: uid(), status: "queued" as const, temperature: t }));
                                                         queueAdd(step.id, entries);
@@ -1219,12 +1264,12 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                             if (!isCurrentOp(step.id, opId)) return;
                                                             queueUpdate(step.id, entries[i].id, (e) => ({ ...e, status: "done", key: data.key, doneAt: Date.now() }));
                                                             void ensureBlobUrlForKey(data.key).catch(() => { });
-                                                            lastKey = data.key as string;
+                                                            if (!firstKey) firstKey = data.key as string;
                                                         }
-                                                        if (lastKey) {
+                                                        if (firstKey && autoAdopt) {
                                                             setKeys((k) => {
-                                                                rememberOldAdopted(step.id, k[step.id], lastKey);
-                                                                return { ...k, [step.id]: lastKey };
+                                                                rememberOldAdopted(step.id, k[step.id], firstKey);
+                                                                return { ...k, [step.id]: firstKey };
                                                             });
                                                             // 採用新結果後，僅讓下游失效
                                                             invalidateDependents(step.id);
