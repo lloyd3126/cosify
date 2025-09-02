@@ -131,9 +131,11 @@ export default function FlowHistory({ slug, flowName }: Props) {
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "刪除失敗");
             toast.success("已刪除");
-            // 刪除後重新從頭載入目前已載入的頁數量較麻煩，先簡化為重置並重新載入第一頁
-            setRuns([]); setCursor(null); setHasMore(true);
-            await load(true);
+            // 就地刪除，保留已載入的其他 run 與游標/hasMore 狀態
+            setRuns((prev) => prev.filter((r) => r.runId !== runId));
+            setExpanded((m) => { const n = { ...m }; delete n[runId]; return n; });
+            setExpandedUI((prev) => { const n = new Set(prev); n.delete(runId); return n; });
+            setExpanding((prev) => { const n = new Set(prev); n.delete(runId); return n; });
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "刪除失敗");
         }
@@ -247,7 +249,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                                         if (!(isExpanded || canExpand)) return null;
                                         return (
                                             <Button variant="secondary" disabled={expanding.has(r.runId)} onClick={() => toggleExpand(r.runId)}>
-                                                {isExpanded ? "收合" : expanding.has(r.runId) ? "讀取中…" : "展開全部"}
+                                                {isExpanded ? "收合" : expanding.has(r.runId) ? "讀取中…" : "展開"}
                                             </Button>
                                         );
                                     })()}
