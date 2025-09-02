@@ -113,6 +113,11 @@
 }
 
 @layer base {
+    html {
+        /* Reserve scrollbar gutter to avoid layout shift when toggling overflow */
+        scrollbar-gutter: stable;
+    }
+
     * {
         @apply border-border outline-ring/50;
     }

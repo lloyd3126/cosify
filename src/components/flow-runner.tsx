@@ -19,6 +19,8 @@ export default function FlowRunner({ slug, flow }: Props) {
     const [keys, setKeys] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState<Record<string, boolean>>({});
     const [lightbox, setLightbox] = useState<{ open: boolean; src: string | null; alt: string | null; index: number | null }>({ open: false, src: null, alt: null, index: null });
+    // Lightbox 模式：若從 Modal 開啟，左右僅在該 Modal 圖片內導覽
+    const [modalNav, setModalNav] = useState<{ stepId: string; keys: string[]; index: number } | null>(null);
     // Blob URL cache keyed by R2 key to avoid re-downloading images for lightbox
     const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
     const inFlight = useRef<Map<string, Promise<string>>>(new Map());
@@ -297,6 +299,17 @@ export default function FlowRunner({ slug, flow }: Props) {
 
     // 已生成 Modal（候選檢視）
     const [openModalFor, setOpenModalFor] = useState<string | null>(null);
+    // 當燈箱開啟時，鎖定 Modal 寬度（px）以避免 viewport 變化導致寬度跳動
+    const modalRef = useRef<HTMLDivElement | null>(null);
+    const [modalLockedWidth, setModalLockedWidth] = useState<number | null>(null);
+    useEffect(() => {
+        if (openModalFor && lightbox.open) {
+            const w = modalRef.current?.offsetWidth ?? null;
+            if (w && w > 0) setModalLockedWidth(w);
+        } else {
+            setModalLockedWidth(null);
+        }
+    }, [openModalFor, lightbox.open]);
 
     return (
         <div className="mx-auto w-full max-w-6xl p-6 pb-12">
@@ -344,7 +357,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                             if (step.type === "imgGenerator" && key && !loading[step.id]) {
                                                 const idx = flow.steps.findIndex((s) => s.id === step.id);
                                                 ensureBlobUrlForKey(key)
-                                                    .then((url) => setLightbox({ open: true, src: url, alt: step.name, index: idx }))
+                                                    .then((url) => { setModalNav(null); setLightbox({ open: true, src: url, alt: step.name, index: idx }); })
                                                     .catch((e) => toast.error(e instanceof Error ? e.message : "下載失敗"));
                                             }
                                         }}
@@ -638,8 +651,18 @@ export default function FlowRunner({ slug, flow }: Props) {
                 open={lightbox.open}
                 src={lightbox.src}
                 alt={lightbox.alt ?? undefined}
-                onClose={() => setLightbox({ open: false, src: null, alt: null, index: null })}
+                onClose={() => { setLightbox({ open: false, src: null, alt: null, index: null }); setModalNav(null); }}
                 onPrev={() => {
+                    if (modalNav) {
+                        if (modalNav.index <= 0) return;
+                        const newIdx = modalNav.index - 1;
+                        const key = modalNav.keys[newIdx];
+                        ensureBlobUrlForKey(key).then((url) => {
+                            setLightbox({ open: true, src: url, alt: flow.steps.find(s => s.id === modalNav.stepId)?.name ?? "", index: null });
+                            setModalNav({ ...modalNav, index: newIdx });
+                        });
+                        return;
+                    }
                     if (lightbox.index == null) return;
                     for (let i = lightbox.index - 1; i >= 0; i--) {
                         const s = flow.steps[i];
@@ -659,6 +682,16 @@ export default function FlowRunner({ slug, flow }: Props) {
                     }
                 }}
                 onNext={() => {
+                    if (modalNav) {
+                        if (modalNav.index >= modalNav.keys.length - 1) return;
+                        const newIdx = modalNav.index + 1;
+                        const key = modalNav.keys[newIdx];
+                        ensureBlobUrlForKey(key).then((url) => {
+                            setLightbox({ open: true, src: url, alt: flow.steps.find(s => s.id === modalNav.stepId)?.name ?? "", index: null });
+                            setModalNav({ ...modalNav, index: newIdx });
+                        });
+                        return;
+                    }
                     if (lightbox.index == null) return;
                     for (let i = lightbox.index + 1; i < flow.steps.length; i++) {
                         const s = flow.steps[i];
@@ -678,6 +711,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                     }
                 }}
                 canPrev={(() => {
+                    if (modalNav) return modalNav.index > 0;
                     if (lightbox.index == null) return false;
                     for (let i = lightbox.index - 1; i >= 0; i--) {
                         const s = flow.steps[i];
@@ -691,6 +725,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                     return false;
                 })()}
                 canNext={(() => {
+                    if (modalNav) return modalNav.index < modalNav.keys.length - 1;
                     if (lightbox.index == null) return false;
                     for (let i = lightbox.index + 1; i < flow.steps.length; i++) {
                         const s = flow.steps[i];
@@ -707,9 +742,16 @@ export default function FlowRunner({ slug, flow }: Props) {
 
             {/* 候選 Modal */}
             {openModalFor && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/60" onClick={() => setOpenModalFor(null)} />
-                    <div className="relative z-10 w-[96vw] max-w-4xl max-h-[90vh] rounded-lg bg-background shadow-lg border">
+                <div className={`fixed inset-0 z-50 flex items-center justify-center ${lightbox.open ? "pointer-events-none" : ""}`}>
+                    <div
+                        className={`absolute inset-0 ${lightbox.open ? "bg-transparent" : "bg-black/60"}`}
+                        onClick={() => setOpenModalFor(null)}
+                    />
+                    <div
+                        ref={modalRef}
+                        className="relative z-10 w-[96vw] max-w-4xl max-h-[90vh] rounded-lg bg-background shadow-lg border"
+                        style={modalLockedWidth ? { width: `${modalLockedWidth}px` } : undefined}
+                    >
                         <div className="flex items-center justify-between p-4 border-b">
                             <div className="font-medium">已生成</div>
                             <button className="rounded p-1 hover:bg-muted" aria-label="關閉" onClick={() => setOpenModalFor(null)}>
@@ -726,8 +768,22 @@ export default function FlowRunner({ slug, flow }: Props) {
                                 const adopted = keys[openModalFor] || null;
                                 return (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                        {queueItems.map((item) => (
-                                            <div key={item.id} className="group relative w-full overflow-hidden rounded-md border" style={{ aspectRatio: "9 / 16" }}>
+                                        {queueItems.map((item, idx) => (
+                                            <div
+                                                key={item.id}
+                                                className="group relative w-full overflow-hidden rounded-md border"
+                                                style={{ aspectRatio: "9 / 16" }}
+                                                onClick={() => {
+                                                    if (item.status === "done" && item.key) {
+                                                        const doneKeys = queueItems.filter((q) => q.status === "done" && q.key).map((q) => q.key!)
+                                                        const selIndex = doneKeys.indexOf(item.key);
+                                                        ensureBlobUrlForKey(item.key).then((url) => {
+                                                            setLightbox({ open: true, src: url, alt: openModalFor, index: null });
+                                                            setModalNav({ stepId: openModalFor!, keys: doneKeys, index: selIndex >= 0 ? selIndex : 0 });
+                                                        });
+                                                    }
+                                                }}
+                                            >
                                                 {item.status === "done" && item.key ? (
                                                     <Image src={`/api/r2/${item.key}`} alt={openModalFor} fill className="object-cover" />
                                                 ) : (
@@ -749,8 +805,8 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                 {item.status === "done" && item.key ? (
                                                     <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <div className="grid grid-cols-2 gap-2">
-                                                            <Button size="sm" onClick={() => { setKeys((s) => ({ ...s, [openModalFor]: item.key! })); setOpenModalFor(null); }} aria-label="設為本步結果">採用</Button>
-                                                            <Button size="sm" variant="secondary" onClick={() => downloadByKey(item.key!, openModalFor)} aria-label="下載">下載</Button>
+                                                            <Button size="sm" onClick={(e) => { e.stopPropagation(); setKeys((s) => ({ ...s, [openModalFor]: item.key! })); setOpenModalFor(null); }} aria-label="設為本步結果">採用</Button>
+                                                            <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); downloadByKey(item.key!, openModalFor); }} aria-label="下載">下載</Button>
                                                         </div>
                                                     </div>
                                                 ) : null}
