@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
+import { Download } from "lucide-react";
 
 type Props = { slug: string; flowName: string };
 
@@ -48,6 +49,19 @@ export default function FlowHistory({ slug, flowName }: Props) {
         })().finally(() => { inFlight.current.delete(key); });
         inFlight.current.set(key, p);
         return p;
+    }
+
+    async function downloadByKey(key: string, filename?: string) {
+        try {
+            const url = await ensureBlobUrlForKey(key);
+            const a = document.createElement("a");
+            a.href = url;
+            const base = filename ?? (key.split("/").pop() || "image.png");
+            a.download = base.endsWith(".png") ? base : `${base}.png`;
+            a.click();
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "下載失敗");
+        }
     }
 
     // 依 Tailwind 斷點偵測（md ~768px=5 欄，lg ~1024px=6 欄）
@@ -233,31 +247,61 @@ export default function FlowHistory({ slug, flowName }: Props) {
                             {!expanded[r.runId] ? (
                                 <div className={gridColsClass}>
                                     {r.itemsPreview.slice(0, cols).map((it, i) => (
-                                        <button
+                                        <div
                                             key={`${it.r2Key}-${i}`}
-                                            type="button"
-                                            className="relative w-full overflow-hidden rounded-md border"
+                                            className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
                                             style={{ aspectRatio: "1 / 1" }}
                                             onClick={() => openRunLightbox(r.runId, it.r2Key)}
+                                            role="button"
                                             aria-label="預覽"
                                         >
                                             <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover" />
-                                        </button>
+                                            {/* hover overlay actions */}
+                                            <div className="absolute inset-0 opacity-0 pointer-events-none transition-opacity bg-black/40 group-hover:opacity-100 group-hover:pointer-events-auto">
+                                                <div className="absolute inset-x-0 bottom-0 p-2 pointer-events-auto">
+                                                    <div className="flex justify-end">
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-black text-white hover:bg-black/90"
+                                                            onClick={(e) => { e.stopPropagation(); downloadByKey(it.r2Key); }}
+                                                            aria-label="下載"
+                                                        >
+                                                            <Download className="h-4 w-4 text-white" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             ) : (
                                 <div className={gridColsClass}>
                                     {expanded[r.runId]!.map((it, i) => (
-                                        <button
+                                        <div
                                             key={`${it.r2Key}-${i}`}
-                                            type="button"
-                                            className="relative w-full overflow-hidden rounded-md border"
+                                            className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
                                             style={{ aspectRatio: "1 / 1" }}
                                             onClick={() => openRunLightbox(r.runId, it.r2Key)}
+                                            role="button"
                                             aria-label="預覽"
                                         >
                                             <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover" />
-                                        </button>
+                                            {/* hover overlay actions */}
+                                            <div className="absolute inset-0 opacity-0 pointer-events-none transition-opacity bg-black/40 group-hover:opacity-100 group-hover:pointer-events-auto">
+                                                <div className="absolute inset-x-0 bottom-0 p-2 pointer-events-auto">
+                                                    <div className="flex justify-end">
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-black text-white hover:bg-black/90"
+                                                            onClick={(e) => { e.stopPropagation(); downloadByKey(it.r2Key); }}
+                                                            aria-label="下載"
+                                                        >
+                                                            <Download className="h-4 w-4 text-white" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             )}
