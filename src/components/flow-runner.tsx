@@ -6,7 +6,7 @@ import UploadCard from "@/components/ui/upload-card";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { Toaster, toast } from "sonner";
-import { Download, RotateCw, X, WandSparkles, Grid3X3 } from "lucide-react";
+import { Download, X, WandSparkles, Grid3X3 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
 import Lightbox from "@/components/ui/lightbox";
@@ -345,7 +345,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                     {/* Bottom overlay actions */}
                                                     <div className="absolute inset-0 z-0 flex items-end p-3 bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
                                                         <div className="w-full grid grid-cols-3 gap-2">
-                                                            {/* 生成（覆蓋採用，會使下游失效） */}
+                                                            {/* 生成（存為變體並採用，會使下游失效） */}
                                                             <Button
                                                                 className="w-full"
                                                                 disabled={!refsReady(step) || !!loading[step.id]}
@@ -360,7 +360,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                             const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                                 method: "POST",
                                                                                 headers: { "Content-Type": "application/json" },
-                                                                                body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: step.data.temperature, inputKeys: refs, asVariant: false }),
+                                                                                body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: step.data.temperature, inputKeys: refs, asVariant: true }),
                                                                             });
                                                                             const data = await res.json();
                                                                             if (!res.ok) throw new Error(data?.error || "生成失敗");
@@ -377,7 +377,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                             >
                                                                 <WandSparkles className="h-4 w-4" />
                                                             </Button>
-                                                            {/* 3x 生成（0.0/0.5/1.0 串行；最後一張採用） */}
+                                                            {/* 3x 生成（0.0/0.5/1.0 串行；三張皆為變體，最後一張採用） */}
                                                             <Button
                                                                 className="w-full"
                                                                 disabled={!refsReady(step) || !!loading[step.id]}
@@ -394,7 +394,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                             let lastKey: string | null = null;
                                                                             for (let i = 0; i < temps.length; i++) {
                                                                                 const t = temps[i];
-                                                                                const asVariant = i < temps.length - 1;
+                                                                                const asVariant = true; // 全部存為變體，避免覆寫，同時可在 Modal 顯示 4 張
                                                                                 const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                                     method: "POST",
                                                                                     headers: { "Content-Type": "application/json" },
@@ -431,7 +431,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                             ) : (
                                                 <div className="absolute inset-x-0 bottom-0 p-3">
                                                     <div className="w-full grid grid-cols-3 gap-2">
-                                                        {/* 生成（初次） */}
+                                                        {/* 生成（初次；存為變體並採用） */}
                                                         <Button
                                                             className="w-full"
                                                             onClick={() => {
@@ -443,7 +443,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                         const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                             method: "POST",
                                                                             headers: { "Content-Type": "application/json" },
-                                                                            body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: step.data.temperature, inputKeys: refs, asVariant: false }),
+                                                                            body: JSON.stringify({ runId, model: step.data.model, prompt: step.data.prompt, temperature: step.data.temperature, inputKeys: refs, asVariant: true }),
                                                                         });
                                                                         const data = await res.json();
                                                                         if (!res.ok) throw new Error(data?.error || "生成失敗");
@@ -461,7 +461,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                         >
                                                             <WandSparkles className="h-4 w-4" />
                                                         </Button>
-                                                        {/* 3x 生成（初次） */}
+                                                        {/* 3x 生成（初次；三張皆為變體，最後一張採用） */}
                                                         <Button
                                                             className="w-full"
                                                             disabled={!refsReady(step) || !!loading[step.id]}
@@ -476,7 +476,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                         let lastKey: string | null = null;
                                                                         for (let i = 0; i < temps.length; i++) {
                                                                             const t = temps[i];
-                                                                            const asVariant = i < temps.length - 1;
+                                                                            const asVariant = true; // 全部存為變體，避免覆寫，同時可在 Modal 顯示 4 張
                                                                             const res = await fetch(`/api/flows/${slug}/steps/${step.id}/generate`, {
                                                                                 method: "POST",
                                                                                 headers: { "Content-Type": "application/json" },
