@@ -5,8 +5,9 @@ import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
-import { Download } from "lucide-react";
+import { Download, ArrowBigLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Props = { slug: string; flowName: string };
 
@@ -237,11 +238,23 @@ export default function FlowHistory({ slug, flowName }: Props) {
         <>
             <div className="mx-auto max-w-5xl p-6 space-y-6">
                 <Toaster richColors />
-                <h1 className="text-2xl font-semibold">歷史紀錄 - {flowName}</h1>
+                {slug === "cosplay-generation" ? (
+                    <div className="flex items-center">
+                        <Link
+                            href={`/flows/${encodeURIComponent(slug)}`}
+                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                            aria-label="返回"
+                        >
+                            <ArrowBigLeft className="h-5 w-5" />
+                        </Link>
+                    </div>
+                ) : (
+                    <h1 className="text-2xl font-semibold">歷史紀錄 - {flowName}</h1>
+                )}
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
                 <div className="space-y-4">
                     {runs.map((r) => (
-                        <Card key={r.runId} className="p-4 space-y-3">
+                        <Card key={r.runId} className="p-4 space-y-3 rounded-md">
                             <div className="flex items-center justify-between">
                                 <div className="text-sm text-muted-foreground">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
                                 <div className="flex items-center gap-2">
@@ -328,7 +341,7 @@ export default function FlowHistory({ slug, flowName }: Props) {
                     {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
                     {hasMore ? (
                         <div className="flex justify-center pt-2">
-                            <Button disabled={loading} onClick={() => load(false)}>載入更多</Button>
+                            <Button className="flex justify-center pt-2" disabled={loading} onClick={() => load(false)}>載入更多</Button>
                         </div>
                     ) : null}
                 </div>
