@@ -16,6 +16,10 @@ type Props = { slug: string; flow: Flow; runIdFromUrl?: string | null; hasHistor
 
 export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Props) {
     const [runId, setRunId] = useState<string | null>(null);
+    const runIdRef = useRef<string | null>(null);
+    useEffect(() => { runIdRef.current = runId; }, [runId]);
+    const fromUrlRef = useRef<string | null | undefined>(null);
+    useEffect(() => { fromUrlRef.current = runIdFromUrl; }, [runIdFromUrl]);
     const [files, setFiles] = useState<Record<string, File | null>>({});
     const [keys, setKeys] = useState<Record<string, string | null>>({});
     const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -164,9 +168,11 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
         })();
         return () => {
             // 元件卸載時嘗試條件清理：若未生成任何圖片就移除 run
-            // 恢復既有 run（runIdFromUrl 存在）時不進行清理
-            if (runId && !runIdFromUrl) {
-                const url = `/api/flows/${slug}/runs/${encodeURIComponent(runId)}/cleanup-if-empty`;
+            // 使用 ref 讀取最新的 runId 與 runIdFromUrl，避免 SPA 導航時閉包抓到舊值
+            const latestRunId = runIdRef.current;
+            const latestFromUrl = fromUrlRef.current;
+            if (latestRunId && !latestFromUrl) {
+                const url = `/api/flows/${slug}/runs/${encodeURIComponent(latestRunId)}/cleanup-if-empty`;
                 try {
                     const blob = new Blob([JSON.stringify({})], { type: "application/json" });
                     navigator.sendBeacon?.(url, blob);
