@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
+import Lightbox from "@/components/ui/lightbox";
 
 type Props = { slug: string; flowName: string };
 
@@ -18,6 +19,36 @@ export default function FlowHistory({ slug, flowName }: Props) {
     const [expanded, setExpanded] = useState<Record<string, Array<{ r2Key: string; createdAt: string; kind?: string }>>>({});
     const [expanding, setExpanding] = useState<Set<string>>(new Set());
     const [cols, setCols] = useState(3); // xs 預設 3 欄
+    // Lightbox 狀態（同一個 run 左右切換）
+    const [lbOpen, setLbOpen] = useState(false);
+    const [lbKeys, setLbKeys] = useState<string[]>([]);
+    const [lbIndex, setLbIndex] = useState(0);
+    const [lbSrc, setLbSrc] = useState<string | null>(null); // 使用本地 blob URL，避免重複下載
+
+    // 簡單的 blob URL 快取：r2Key -> objectURL；並去重並行請求
+    const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+    const blobUrlsRef = useRef<Record<string, string>>({});
+    const inFlight = useRef<Map<string, Promise<string>>>(new Map());
+    useEffect(() => { blobUrlsRef.current = blobUrls; }, [blobUrls]);
+    // 卸載時釋放所有 object URL
+    useEffect(() => () => { Object.values(blobUrlsRef.current).forEach((u) => { try { URL.revokeObjectURL(u); } catch { } }); }, []);
+
+    async function ensureBlobUrlForKey(key: string): Promise<string> {
+        const cached = blobUrlsRef.current[key];
+        if (cached) return cached;
+        const existing = inFlight.current.get(key);
+        if (existing) return existing;
+        const p = (async () => {
+            const res = await fetch(`/api/r2/${key}`, { cache: "no-store" });
+            if (!res.ok) throw new Error("下載失敗");
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            setBlobUrls((prev) => ({ ...prev, [key]: url }));
+            return url;
+        })().finally(() => { inFlight.current.delete(key); });
+        inFlight.current.set(key, p);
+        return p;
+    }
 
     // 依 Tailwind 斷點偵測（md ~768px=5 欄，lg ~1024px=6 欄）
     useEffect(() => {
@@ -109,56 +140,171 @@ export default function FlowHistory({ slug, flowName }: Props) {
         }
     }
 
+    async function openRunLightbox(runId: string, r2Key: string) {
+        // 1) 先顯示點擊的圖片（本地快取 blob URL），再處理清單載入
+        try {
+            const url = await ensureBlobUrlForKey(r2Key);
+            setLbSrc(url);
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "下載失敗");
+            return;
+        }
+
+        const items = expanded[runId];
+        if (items && items.length) {
+            // 已有完整清單：直接更新 keys/index 並開啟
+            const keys = items.map((it) => it.r2Key);
+            const idx = Math.max(0, keys.indexOf(r2Key));
+            setLbKeys(keys);
+            setLbIndex(idx);
+            setLbOpen(true);
+            // 預載相鄰
+            const left = idx - 1 >= 0 ? keys[idx - 1] : null;
+            const right = idx + 1 < keys.length ? keys[idx + 1] : null;
+            if (left) void ensureBlobUrlForKey(left).catch(() => { });
+            if (right) void ensureBlobUrlForKey(right).catch(() => { });
+            return;
+        }
+
+        // 尚未有完整清單：先用單一 key 開啟，背景抓清單
+        setLbKeys([r2Key]);
+        setLbIndex(0);
+        setLbOpen(true);
+        setExpanding((prev) => new Set(prev).add(runId));
+        (async () => {
+            try {
+                const res = await fetch(`/api/flows/${slug}/history/${runId}/items`, { cache: "no-store" });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error || "讀取失敗");
+                const itemsLoaded = (data.items || []) as Array<{ r2Key: string; createdAt: string; kind?: string }>;
+                setExpanded((m) => ({ ...m, [runId]: itemsLoaded }));
+                const keys = itemsLoaded.map((it) => it.r2Key);
+                const idx = Math.max(0, keys.indexOf(r2Key));
+                setLbKeys(keys);
+                setLbIndex(idx);
+                // 預載相鄰
+                const left = idx - 1 >= 0 ? keys[idx - 1] : null;
+                const right = idx + 1 < keys.length ? keys[idx + 1] : null;
+                if (left) void ensureBlobUrlForKey(left).catch(() => { });
+                if (right) void ensureBlobUrlForKey(right).catch(() => { });
+            } catch (e) {
+                // 清單失敗不影響已開啟的圖片；必要時可提示
+                // toast.error(e instanceof Error ? e.message : "讀取失敗");
+            } finally {
+                setExpanding((prev) => { const n = new Set(prev); n.delete(runId); return n; });
+            }
+        })();
+    }
+
+    // 當燈箱索引變更時，預載相鄰圖片
+    useEffect(() => {
+        if (!lbOpen || !lbKeys.length) return;
+        const left = lbIndex - 1 >= 0 ? lbKeys[lbIndex - 1] : null;
+        const right = lbIndex + 1 < lbKeys.length ? lbKeys[lbIndex + 1] : null;
+        if (left) void ensureBlobUrlForKey(left).catch(() => { });
+        if (right) void ensureBlobUrlForKey(right).catch(() => { });
+    }, [lbOpen, lbIndex, lbKeys]);
+
     return (
-        <div className="mx-auto max-w-5xl p-6 space-y-6">
-            <Toaster richColors />
-            <h1 className="text-2xl font-semibold">歷史紀錄 - {flowName}</h1>
-            {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
-            <div className="space-y-4">
-                {runs.map((r) => (
-                    <Card key={r.runId} className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="text-sm text-muted-foreground">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
-                            <div className="flex items-center gap-2">
-                                {(() => {
-                                    const isExpanded = !!expanded[r.runId];
-                                    const canExpand = r.itemsTotal > cols;
-                                    if (!(isExpanded || canExpand)) return null;
-                                    return (
-                                        <Button variant="secondary" disabled={expanding.has(r.runId)} onClick={() => toggleExpand(r.runId)}>
-                                            {isExpanded ? "收合" : expanding.has(r.runId) ? "讀取中…" : "展開全部"}
-                                        </Button>
-                                    );
-                                })()}
-                                <Button variant="destructive" onClick={() => remove(r.runId)}>刪除</Button>
+        <>
+            <div className="mx-auto max-w-5xl p-6 space-y-6">
+                <Toaster richColors />
+                <h1 className="text-2xl font-semibold">歷史紀錄 - {flowName}</h1>
+                {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
+                <div className="space-y-4">
+                    {runs.map((r) => (
+                        <Card key={r.runId} className="p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="text-sm text-muted-foreground">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
+                                <div className="flex items-center gap-2">
+                                    {(() => {
+                                        const isExpanded = !!expanded[r.runId];
+                                        const canExpand = r.itemsTotal > cols;
+                                        if (!(isExpanded || canExpand)) return null;
+                                        return (
+                                            <Button variant="secondary" disabled={expanding.has(r.runId)} onClick={() => toggleExpand(r.runId)}>
+                                                {isExpanded ? "收合" : expanding.has(r.runId) ? "讀取中…" : "展開全部"}
+                                            </Button>
+                                        );
+                                    })()}
+                                    <Button variant="destructive" onClick={() => remove(r.runId)}>刪除</Button>
+                                </div>
                             </div>
+                            {!expanded[r.runId] ? (
+                                <div className={gridColsClass}>
+                                    {r.itemsPreview.slice(0, cols).map((it, i) => (
+                                        <button
+                                            key={`${it.r2Key}-${i}`}
+                                            type="button"
+                                            className="relative w-full overflow-hidden rounded-md border"
+                                            style={{ aspectRatio: "1 / 1" }}
+                                            onClick={() => openRunLightbox(r.runId, it.r2Key)}
+                                            aria-label="預覽"
+                                        >
+                                            <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover" />
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className={gridColsClass}>
+                                    {expanded[r.runId]!.map((it, i) => (
+                                        <button
+                                            key={`${it.r2Key}-${i}`}
+                                            type="button"
+                                            className="relative w-full overflow-hidden rounded-md border"
+                                            style={{ aspectRatio: "1 / 1" }}
+                                            onClick={() => openRunLightbox(r.runId, it.r2Key)}
+                                            aria-label="預覽"
+                                        >
+                                            <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover" />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </Card>
+                    ))}
+                    {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
+                    {hasMore ? (
+                        <div className="flex justify-center pt-2">
+                            <Button disabled={loading} onClick={() => load(false)}>載入更多</Button>
                         </div>
-                        {!expanded[r.runId] ? (
-                            <div className={gridColsClass}>
-                                {r.itemsPreview.slice(0, cols).map((it, i) => (
-                                    <div key={`${it.r2Key}-${i}`} className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
-                                        <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover rounded-md border" />
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className={gridColsClass}>
-                                {expanded[r.runId]!.map((it, i) => (
-                                    <div key={`${it.r2Key}-${i}`} className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
-                                        <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover rounded-md border" />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </Card>
-                ))}
-                {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
-                {hasMore ? (
-                    <div className="flex justify-center pt-2">
-                        <Button disabled={loading} onClick={() => load(false)}>載入更多</Button>
-                    </div>
-                ) : null}
+                    ) : null}
+                </div>
             </div>
-        </div>
+            {/* Lightbox：同一個 run 內左右切換；使用本地快取的 blob URL */}
+            <Lightbox
+                open={lbOpen}
+                src={lbSrc}
+                onClose={() => { setLbOpen(false); setLbKeys([]); setLbIndex(0); setLbSrc(null); }}
+                onPrev={async () => {
+                    if (lbIndex <= 0) return;
+                    const nextIdx = lbIndex - 1;
+                    const key = lbKeys[nextIdx];
+                    try {
+                        const url = await ensureBlobUrlForKey(key);
+                        setLbIndex(nextIdx);
+                        setLbSrc(url);
+                        // 預載更左邊
+                        const moreLeft = nextIdx - 1 >= 0 ? lbKeys[nextIdx - 1] : null;
+                        if (moreLeft) void ensureBlobUrlForKey(moreLeft).catch(() => { });
+                    } catch { }
+                }}
+                onNext={async () => {
+                    if (lbIndex >= lbKeys.length - 1) return;
+                    const nextIdx = lbIndex + 1;
+                    const key = lbKeys[nextIdx];
+                    try {
+                        const url = await ensureBlobUrlForKey(key);
+                        setLbIndex(nextIdx);
+                        setLbSrc(url);
+                        // 預載更右邊
+                        const moreRight = nextIdx + 1 < lbKeys.length ? lbKeys[nextIdx + 1] : null;
+                        if (moreRight) void ensureBlobUrlForKey(moreRight).catch(() => { });
+                    } catch { }
+                }}
+                canPrev={lbIndex > 0}
+                canNext={lbIndex < lbKeys.length - 1}
+            />
+        </>
     );
 }
