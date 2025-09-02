@@ -261,7 +261,7 @@ export default function FlowRunner({ slug, flow }: Props) {
             invalidateFrom(id);
         } else if (step.type === "imgGenerator") {
             invalidateFrom(id);
-            queueClear(id);
+            // Plan A: 保留生成佇列（含已完成/佔位），僅使當前結果與下游失效
         }
     }
 
