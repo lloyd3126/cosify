@@ -178,7 +178,7 @@
             "steps": [
                 {
                     "id": "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A",
-                    "name": "上傳想扮演的角色照",
+                    "name": "上傳想生成的角色",
                     "type": "uploader",
                     "data": {}
                 },
@@ -197,7 +197,7 @@
                 },
                 {
                     "id": "41A6794D-77C6-4579-9FFB-F9F48E017D49",
-                    "name": "生成角色的扮演圖",
+                    "name": "生成角色扮演圖",
                     "type": "imgGenerator",
                     "data": {
                         "model": "gemini-2.5-flash-image-preview",
@@ -205,20 +205,6 @@
                         "temperature": 1,
                         "referenceImgs": [
                             "19695F27-8DDB-446C-895D-B11A980508BE"
-                        ]
-                    }
-                },
-                {
-                    "id": "572A91CB-4A1A-4A54-995D-6220EC7E5DA2",
-                    "name": "微調角色的動作與表情",
-                    "type": "imgGenerator",
-                    "data": {
-                        "model": "gemini-2.5-flash-image-preview",
-                        "prompt": "The cosplayer of image 2 should have a similar pose and expression as the character in the illustration of image 1.",
-                        "temperature": 1,
-                        "referenceImgs": [
-                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A",
-                            "41A6794D-77C6-4579-9FFB-F9F48E017D49"
                         ]
                     }
                 }
@@ -243,6 +229,20 @@
                         "temperature": 1,
                         "referenceImgs": [
                             "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A"
+                        ]
+                    }
+                },
+                {
+                    "id": "572A91CB-4A1A-4A54-995D-6220EC7E5DA2",
+                    "name": "微調動作與表情",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "The cosplayer of image 2 should have a similar pose and expression as the character in the illustration of image 1.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "CA83BE14-697D-4CDC-A911-9A1AEA3AB82A",
+                            "41A6794D-77C6-4579-9FFB-F9F48E017D49"
                         ]
                     }
                 }

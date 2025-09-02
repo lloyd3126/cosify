@@ -85,6 +85,20 @@ CREATE TABLE IF NOT EXISTS flow_run_steps (
 	created_at INTEGER NOT NULL,
 	PRIMARY KEY (run_id, step_id)
 );
+
+CREATE TABLE IF NOT EXISTS flow_run_step_assets (
+	id TEXT PRIMARY KEY,
+	run_id TEXT NOT NULL,
+	step_id TEXT NOT NULL,
+	r2_key TEXT NOT NULL,
+	status TEXT NOT NULL DEFAULT 'done',
+	temperature INTEGER,
+	model TEXT,
+	prompt TEXT,
+	meta TEXT,
+	created_at INTEGER NOT NULL,
+	UNIQUE (run_id, step_id, r2_key)
+);
 `);
 // Backfill: add updated_at to verification if missing (older dev DBs)
 try {

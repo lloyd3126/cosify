@@ -69,6 +69,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 
         await r2Put(key, out, "image/png");
 
+        // 落庫：資產（變體）持久化
+        try {
+            await db
+                .insert(schema.flowRunStepAssets)
+                .values({
+                    id: randomUUID(),
+                    runId: body.runId,
+                    stepId,
+                    r2Key: key,
+                    status: "done",
+                    temperature: body.temperature,
+                    model: body.model,
+                    prompt: body.prompt,
+                    createdAt: new Date(),
+                })
+                .onConflictDoNothing();
+        } catch { }
+
         if (!isVariant) {
             await db
                 .insert(schema.flowRunSteps)

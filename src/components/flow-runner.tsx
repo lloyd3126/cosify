@@ -71,6 +71,12 @@ export default function FlowRunner({ slug, flow }: Props) {
     type GenStatus = "queued" | "running" | "done" | "error";
     type GenEntry = { id: string; status: GenStatus; key?: string; temperature?: number; error?: string };
     const [generationQueue, setGenerationQueue] = useState<Record<string, GenEntry[]>>({});
+    // DB 資產（done）
+    type StepAsset = { id: string; r2Key: string; temperature: number | null; createdAt?: string };
+    const [stepAssets, setStepAssets] = useState<Record<string, StepAsset[]>>({});
+    const [assetsLoading, setAssetsLoading] = useState<Record<string, boolean>>({});
+    // 穩定顯示順序：依生成先後（第一個出現者排前），key 陣列
+    const [stepOrder, setStepOrder] = useState<Record<string, string[]>>({});
     const stepOpSeqRef = useRef<Record<string, number>>({});
     const nextOpId = (stepId: string) => {
         const v = (stepOpSeqRef.current[stepId] || 0) + 1;
@@ -88,6 +94,38 @@ export default function FlowRunner({ slug, flow }: Props) {
     }
     function queueClear(stepId: string) {
         setGenerationQueue((prev) => { const n = { ...prev }; delete n[stepId]; return n; });
+    }
+
+    // 是否忙碌：當前步驟存在載入或佇列中有 queued/running
+    function isStepBusy(stepId: string) {
+        if (loading[stepId]) return true;
+        const q = generationQueue[stepId] || [];
+        return q.some((e) => e.status === "queued" || e.status === "running");
+    }
+
+    // 找出上游相依（祖先）
+    function getAllAncestors(startId: string): Set<string> {
+        const visited = new Set<string>();
+        const pushRefs = (id: string) => {
+            const s = flow.steps.find((x) => x.id === id);
+            if (s && s.type === "imgGenerator") {
+                for (const ref of s.data.referenceImgs) {
+                    if (!visited.has(ref)) { visited.add(ref); pushRefs(ref); }
+                }
+            }
+        };
+        pushRefs(startId);
+        return visited;
+    }
+
+    // 鏈上忙碌：自身或上游/下游有 busy 即視為忙碌
+    function isChainBusy(stepId: string) {
+        if (isStepBusy(stepId)) return true;
+        const ups = getAllAncestors(stepId);
+        for (const u of ups) if (isStepBusy(u)) return true;
+        const downs = getAllDependents(stepId);
+        for (const d of downs) if (isStepBusy(d)) return true;
+        return false;
     }
 
     // Confirm dialogs
@@ -299,6 +337,52 @@ export default function FlowRunner({ slug, flow }: Props) {
 
     // 已生成 Modal（候選檢視）
     const [openModalFor, setOpenModalFor] = useState<string | null>(null);
+    // 當 Modal 開啟，抓取 DB 中的 done 資產清單
+    useEffect(() => {
+        if (!openModalFor || !runId) return;
+        const stepId = openModalFor;
+        setAssetsLoading((s) => ({ ...s, [stepId]: true }));
+        fetch(`/api/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/assets`)
+            .then(async (res) => {
+                if (!res.ok) throw new Error("無法取得資產");
+                const data: { assets: Array<{ id: string; r2Key: string; temperature: number | null; createdAt?: string }>; adoptedKey?: string | null } = await res.json();
+                setStepAssets((prev) => ({ ...prev, [stepId]: data.assets || [] }));
+                // 將 DB 資產依 createdAt 由舊到新記入穩定順序
+                if (Array.isArray(data.assets) && data.assets.length) {
+                    const sortedAsc = [...data.assets].sort((a, b) => (new Date(a.createdAt || 0).getTime()) - (new Date(b.createdAt || 0).getTime()));
+                    setStepOrder((prev) => {
+                        const curr = prev[stepId] || [];
+                        const seen = new Set(curr);
+                        const appended = [...curr];
+                        for (const a of sortedAsc) {
+                            if (!seen.has(a.r2Key)) { appended.push(a.r2Key); seen.add(a.r2Key); }
+                        }
+                        if (appended.length === curr.length) return prev;
+                        return { ...prev, [stepId]: appended };
+                    });
+                }
+                if (data.adoptedKey) {
+                    setKeys((k) => ({ ...k, [stepId]: data.adoptedKey! }));
+                }
+            })
+            .catch(() => { /* 靜默失敗，維持本地資料 */ })
+            .finally(() => setAssetsLoading((s) => ({ ...s, [stepId]: false })));
+    }, [openModalFor, runId]);
+
+    // 監控佇列：當某項首次成為 done 且有 key，立刻加入穩定順序尾端
+    useEffect(() => {
+        for (const [sid, list] of Object.entries(generationQueue)) {
+            for (const e of list) {
+                if (e.status === "done" && e.key) {
+                    setStepOrder((prev) => {
+                        const curr = prev[sid] || [];
+                        if (curr.includes(e.key!)) return prev;
+                        return { ...prev, [sid]: [...curr, e.key!] };
+                    });
+                }
+            }
+        }
+    }, [generationQueue]);
     // 當燈箱開啟時，鎖定 Modal 寬度（px）以避免 viewport 變化導致寬度跳動
     const modalRef = useRef<HTMLDivElement | null>(null);
     const [modalLockedWidth, setModalLockedWidth] = useState<number | null>(null);
@@ -397,7 +481,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                             {/* 生成（存為變體並採用，會使下游失效） */}
                                                             <Button
                                                                 className="w-full"
-                                                                disabled={!refsReady(step) || !!loading[step.id]}
+                                                                disabled={!refsReady(step) || isChainBusy(step.id)}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (!runId) return;
@@ -439,7 +523,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                             {/* 3x 生成（0.0/0.5/1.0 串行；三張皆為變體，最後一張採用） */}
                                                             <Button
                                                                 className="w-full"
-                                                                disabled={!refsReady(step) || !!loading[step.id]}
+                                                                disabled={!refsReady(step) || isChainBusy(step.id)}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (!runId) return;
@@ -542,7 +626,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                     }
                                                                 })();
                                                             }}
-                                                            disabled={!refsReady(step) || !!loading[step.id]}
+                                                            disabled={!refsReady(step) || isChainBusy(step.id)}
                                                             aria-label="生成"
                                                         >
                                                             <WandSparkles className="h-4 w-4" />
@@ -550,7 +634,7 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                         {/* 3x 生成（初次；三張皆為變體，最後一張採用） */}
                                                         <Button
                                                             className="w-full"
-                                                            disabled={!refsReady(step) || !!loading[step.id]}
+                                                            disabled={!refsReady(step) || isChainBusy(step.id)}
                                                             onClick={() => {
                                                                 if (!runId) return;
                                                                 setOpenModalFor(step.id);
@@ -760,12 +844,32 @@ export default function FlowRunner({ slug, flow }: Props) {
                         </div>
                         <div className="p-4 overflow-auto" style={{ maxHeight: "70vh" }}>
                             {(() => {
-                                const q = generationQueue[openModalFor] || [];
-                                const queueItems: Array<GenEntry> = q.length > 0
-                                    ? q
-                                    : (candidates[openModalFor] || []).map((k) => ({ id: k, status: "done" as const, key: k }));
+                                const stepId = openModalFor;
+                                const q = generationQueue[stepId] || [];
+                                const db = stepAssets[stepId] || [];
+                                // 合併 done（DB 與 Queue）並以 key 去重，確保 queue 的 done 立即可見
+                                const doneMap = new Map<string, GenEntry>();
+                                for (const a of db) {
+                                    doneMap.set(a.r2Key, { id: a.id, status: "done", key: a.r2Key, temperature: a.temperature ?? undefined });
+                                }
+                                for (const e of q) {
+                                    if (e.status === "done" && e.key) {
+                                        if (!doneMap.has(e.key)) doneMap.set(e.key, e);
+                                    }
+                                }
+                                let doneMerged = Array.from(doneMap.values());
+                                // 依穩定順序排序（先出現者在前），未知者置後但保持相對順序
+                                const order = stepOrder[stepId] || [];
+                                const idxMap = new Map(order.map((k, i) => [k, i] as const));
+                                doneMerged.sort((a, b) => {
+                                    const ai = a.key ? (idxMap.get(a.key) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+                                    const bi = b.key ? (idxMap.get(b.key) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+                                    return ai - bi;
+                                });
+                                const nonDoneFromQueue = q.filter((e) => e.status !== "done");
+                                const queueItems: Array<GenEntry> = [...doneMerged, ...nonDoneFromQueue];
                                 if (queueItems.length === 0) return <div className="text-sm text-muted-foreground">尚無生成結果</div>;
-                                const adopted = keys[openModalFor] || null;
+                                const adopted = keys[stepId] || null;
                                 return (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                         {queueItems.map((item, idx) => (
@@ -812,7 +916,42 @@ export default function FlowRunner({ slug, flow }: Props) {
                                                                     <Button
                                                                         size="sm"
                                                                         className="bg-black text-white hover:bg-black/90"
-                                                                        onClick={(e) => { e.stopPropagation(); setKeys((s) => ({ ...s, [openModalFor]: item.key! })); setOpenModalFor(null); }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const sid = stepId;
+                                                                            const key = item.key!;
+                                                                            // 立即更新 UI
+                                                                            setKeys((s) => ({ ...s, [sid]: key }));
+                                                                            setOpenModalFor(null);
+                                                                            // 以 item.id 當作 assetId（若為 DB 來源）
+                                                                            const assetId = item.id;
+                                                                            const tryAdopt = (aid: string) => fetch(`/api/runs/${encodeURIComponent(runId!)}/steps/${encodeURIComponent(sid)}/adopt`, {
+                                                                                method: "POST",
+                                                                                headers: { "Content-Type": "application/json" },
+                                                                                body: JSON.stringify({ assetId: aid }),
+                                                                            }).then((res) => res.ok ? null : res.json().then((d) => Promise.reject(new Error(d?.error || "採用失敗"))));
+                                                                            if (assetId && assetId.length > 0) {
+                                                                                void tryAdopt(assetId).catch((err) => toast.error(err.message));
+                                                                            } else {
+                                                                                // 從 DB 清單嘗試以 key 對應 assetId
+                                                                                const assets = stepAssets[sid] || [];
+                                                                                const found = assets.find((a) => a.r2Key === key);
+                                                                                if (found) {
+                                                                                    void tryAdopt(found.id).catch((err) => toast.error(err.message));
+                                                                                } else {
+                                                                                    // 稍後重取一次資產再嘗試
+                                                                                    setTimeout(() => {
+                                                                                        fetch(`/api/runs/${encodeURIComponent(runId!)}/steps/${encodeURIComponent(sid)}/assets`)
+                                                                                            .then((r) => r.ok ? r.json() : null)
+                                                                                            .then((data) => {
+                                                                                                const again = data?.assets?.find((a: any) => a.r2Key === key);
+                                                                                                if (again) void tryAdopt(again.id).catch((err) => toast.error(err.message));
+                                                                                            })
+                                                                                            .catch(() => { /* ignore */ });
+                                                                                    }, 500);
+                                                                                }
+                                                                            }
+                                                                        }}
                                                                         aria-label="設為本步結果"
                                                                     >
                                                                         <BookmarkCheck className="h-4 w-4 text-white" />
@@ -838,14 +977,20 @@ export default function FlowRunner({ slug, flow }: Props) {
                         </div>
                         <div className="flex items-center justify-between p-4 border-t text-sm text-muted-foreground">
                             {(() => {
-                                const q = generationQueue[openModalFor] || [];
-                                const count = q.length > 0 ? q.length : (candidates[openModalFor]?.length ?? 0);
-                                return <div>已生成 {count} 張</div>;
+                                const stepId = openModalFor;
+                                const q = generationQueue[stepId] || [];
+                                const db = stepAssets[stepId] || [];
+                                // 僅計入 done：DB 資產 + 佇列中的 done（以 key 去重）
+                                const doneSet = new Set<string>();
+                                for (const a of db) doneSet.add(a.r2Key);
+                                for (const e of q) if (e.status === "done" && e.key) doneSet.add(e.key);
+                                const count = doneSet.size;
+                                return <div>已生成 {count} 張{assetsLoading[stepId] ? " · 載入中" : ""}</div>;
                             })()}
                             {(() => {
                                 const step = flow.steps.find((s) => s.id === openModalFor && s.type === "imgGenerator");
                                 if (!step || step.type !== "imgGenerator") return null;
-                                const disabled = !refsReady(step) || !!loading[step.id];
+                                const disabled = !refsReady(step) || isChainBusy(step.id);
                                 return (
                                     <div className="flex items-center gap-2 text-foreground">
                                         {/* 單張生成（存為變體並採用）*/}

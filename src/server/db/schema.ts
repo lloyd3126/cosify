@@ -147,3 +147,21 @@ export const flowRunSteps = sqliteTable("flow_run_steps", {
 
 export type FlowRun = typeof flowRuns.$inferSelect;
 export type FlowRunStep = typeof flowRunSteps.$inferSelect;
+
+// 歷史候選資產（每張變體一列）
+export const flowRunStepAssets = sqliteTable("flow_run_step_assets", {
+    id: text("id").primaryKey(),
+    runId: text("run_id").notNull(),
+    stepId: text("step_id").notNull(),
+    r2Key: text("r2_key").notNull(),
+    status: text("status").notNull().default("done"), // 'done' | 'error'（目前僅 done 落庫）
+    temperature: integer("temperature"),
+    model: text("model"),
+    prompt: text("prompt"),
+    meta: text("meta"), // JSON 字串（可選）
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+});
+
+export type FlowRunStepAsset = typeof flowRunStepAssets.$inferSelect;
