@@ -307,6 +307,25 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
         });
     }
 
+    // 僅使下游失效（保留當前步驟結果，用於採用新結果後刷新下游）
+    function invalidateDependents(stepId: string) {
+        const affected = getAllDependents(stepId);
+        for (const id of affected) {
+            const k = keys[id];
+            if (typeof k === "string" && k && blobUrlsRef.current[k]) {
+                const url = blobUrlsRef.current[k];
+                try { URL.revokeObjectURL(url); } catch { }
+                setBlobUrls((prev) => { const n = { ...prev }; delete n[k]; return n; });
+                inFlight.current.delete(k);
+            }
+        }
+        setKeys((k) => {
+            const next = { ...k };
+            for (const id of affected) next[id] = null;
+            return next;
+        });
+    }
+
     async function ensureBlobUrlForKey(key: string): Promise<string> {
         if (blobUrlsRef.current[key]) return blobUrlsRef.current[key];
         const existing = inFlight.current.get(key);
@@ -531,6 +550,10 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                     >
                                         {loading[step.id] ? (
                                             <>
+                                                {/* 載入中：若已有結果，仍顯示原圖 */}
+                                                {step.type === "imgGenerator" && keys[step.id] ? (
+                                                    <Image src={`/api/r2/${keys[step.id]}`} alt={step.name} fill className="object-cover" />
+                                                ) : null}
                                                 <div className="absolute inset-0 grid place-items-center">
                                                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-muted-foreground" />
                                                 </div>
@@ -568,7 +591,6 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (!runId) return;
-                                                                    invalidateFrom(step.id);
                                                                     // 先加入隊列占位（單次一張）
                                                                     const entryId = uid();
                                                                     queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
@@ -589,6 +611,8 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                             if (!isCurrentOp(step.id, opId)) return;
                                                                             setKeys((k) => ({ ...k, [step.id]: data.key }));
                                                                             queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key }));
+                                                                            // 採用新結果後，僅讓下游失效
+                                                                            invalidateDependents(step.id);
                                                                             void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                         } catch (err) {
                                                                             const msg = err instanceof Error ? err.message : "生成失敗";
@@ -610,7 +634,6 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (!runId) return;
-                                                                    invalidateFrom(step.id);
                                                                     setOpenModalFor(step.id);
                                                                     setLoading((s) => ({ ...s, [step.id]: true }));
                                                                     const opId = nextOpId(step.id);
@@ -639,7 +662,11 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                                 void ensureBlobUrlForKey(data.key).catch(() => { });
                                                                                 lastKey = data.key as string;
                                                                             }
-                                                                            if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                                            if (lastKey) {
+                                                                                setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                                                // 採用新結果後，僅讓下游失效
+                                                                                invalidateDependents(step.id);
+                                                                            }
                                                                         } catch (err) {
                                                                             const msg = err instanceof Error ? err.message : "生成失敗";
                                                                             // 標記所有未完成為 error
@@ -1084,8 +1111,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (!runId) return;
-                                                // 與卡片一致：使下游失效
-                                                invalidateFrom(step.id);
+                                                // 與卡片一致：保留本步結果，待採用新結果後使下游失效
                                                 // 先加入隊列占位（單次一張）
                                                 const entryId = uid();
                                                 queueAdd(step.id, [{ id: entryId, status: "queued", temperature: step.data.temperature }]);
@@ -1106,6 +1132,8 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                         if (!isCurrentOp(step.id, opId)) return;
                                                         setKeys((k) => ({ ...k, [step.id]: data.key }));
                                                         queueUpdate(step.id, entryId, (e) => ({ ...e, status: "done", key: data.key }));
+                                                        // 採用新結果後，僅讓下游失效
+                                                        invalidateDependents(step.id);
                                                         void ensureBlobUrlForKey(data.key).catch(() => { });
                                                     } catch (err) {
                                                         const msg = err instanceof Error ? err.message : "生成失敗";
@@ -1128,8 +1156,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (!runId) return;
-                                                // 與卡片一致：使下游失效
-                                                invalidateFrom(step.id);
+                                                // 與卡片一致：保留本步結果，待採用新結果後使下游失效
                                                 setLoading((s) => ({ ...s, [step.id]: true }));
                                                 const opId = nextOpId(step.id);
                                                 (async () => {
@@ -1157,7 +1184,11 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                             void ensureBlobUrlForKey(data.key).catch(() => { });
                                                             lastKey = data.key as string;
                                                         }
-                                                        if (lastKey) setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                        if (lastKey) {
+                                                            setKeys((k) => ({ ...k, [step.id]: lastKey }));
+                                                            // 採用新結果後，僅讓下游失效
+                                                            invalidateDependents(step.id);
+                                                        }
                                                     } catch (err) {
                                                         const msg = err instanceof Error ? err.message : "生成失敗";
                                                         // 標記所有未完成為 error
