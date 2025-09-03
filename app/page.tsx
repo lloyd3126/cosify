@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { getHomepageFlows } from "@/server/flows";
+import { getHomepageFlows, getHomepageFlowImages, getHomepageImagesByIndex } from "@/server/flows";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default function Home() {
     const flows = getHomepageFlows(3);
+    const images = getHomepageFlowImages();
+    const imagesByIndex = getHomepageImagesByIndex();
     return (
         <div className="mx-auto w-full max-w-6xl p-6 space-y-10">
             {/* Hero */}
@@ -27,16 +29,16 @@ export default function Home() {
                 <div className="relative">
                     <div className="-mx-6 overflow-x-auto px-6">
                         <div className="flex snap-x snap-mandatory gap-4">
-                            {flows.map(flow => (
+                            {flows.map((flow, idx) => (
                                 <Link
                                     key={flow.slug}
                                     href={`/flows/${flow.slug}/new`}
                                     className="snap-start shrink-0 w-[85%] sm:w-[48%] md:w-[32%]"
                                 >
-                                    <Card className="overflow-hidden hover:bg-muted/30 border">
-                                        <div className="relative w-full" style={{ aspectRatio: "16 / 9" }}>
+                                    <Card className="overflow-hidden hover:bg-muted/30 border pt-0 pb-6">
+                                        <div className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
                                             <Image
-                                                src={flow.metadata?.thumbnail || "/vercel.svg"}
+                                                src={imagesByIndex[idx] || images[flow.slug] || flow.metadata?.thumbnail || "/vercel.svg"}
                                                 alt={flow.name}
                                                 fill
                                                 className="object-contain bg-muted"

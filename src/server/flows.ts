@@ -14,7 +14,9 @@ export type Flow = {
 
 export type FlowsFile = {
     flows: Record<string, Flow>;
-    homepage?: { flows?: Record<string, string> };
+    homepage?: {
+        flows?: Record<string, string | { id: string; imageUrl?: string }>;
+    };
 };
 
 // 簡化：每次讀取檔案（檔案小，效能可接受）。如需快取可再加入 fs.stat 判斷。
@@ -51,11 +53,25 @@ export function getHomepageFlows(limit: number = 3): Flow[] {
     const pickedSlugs = new Set<string>();
     const hp = raw.homepage?.flows || {};
     const ordered = Object.entries(hp)
-        .map(([k, id]) => ({ idx: Number(k), id }))
-        .filter((x) => Number.isFinite(x.idx) && typeof x.id === "string")
+        .map(([k, v]) => {
+            const idx = Number(k);
+            let id: string | null = null;
+            if (typeof v === "string") id = v;
+            else if (v && typeof v === "object" && typeof (v as any).id === "string") id = (v as any).id;
+            return { idx, id };
+        })
+        .filter((x) => Number.isFinite(x.idx) && typeof x.id === "string" && !!x.id)
         .sort((a, b) => a.idx - b.idx);
+    // helper: resolve id as flowId or stepId
+    const resolveFlowByAnyId = (anyId: string): Flow | undefined => {
+        if (raw.flows[anyId]) return raw.flows[anyId];
+        for (const f of Object.values(raw.flows)) {
+            if (Array.isArray(f.steps) && f.steps.some((s) => s.id === anyId)) return f;
+        }
+        return undefined;
+    };
     for (const { id } of ordered) {
-        const flow = raw.flows[id];
+        const flow = id ? resolveFlowByAnyId(id) : undefined;
         if (!flow) continue;
         if ((flow.metadata?.visibility ?? "public") !== "public") continue;
         if (pickedSlugs.has(flow.slug)) continue;
@@ -72,6 +88,47 @@ export function getHomepageFlows(limit: number = 3): Flow[] {
         }
     }
     return result.slice(0, limit);
+}
+
+// 取得首頁卡片對應的自訂圖片（slug -> imageUrl）
+export function getHomepageFlowImages(): Record<string, string> {
+    const raw = loadRaw();
+    const map: Record<string, string> = {};
+    const hp = raw.homepage?.flows || {};
+    // helper to resolve id -> flow slug
+    const resolveSlugByAnyId = (anyId: string): string | null => {
+        if (raw.flows[anyId]) return raw.flows[anyId].slug;
+        for (const f of Object.values(raw.flows)) {
+            if (Array.isArray(f.steps) && f.steps.some((s) => s.id === anyId)) return f.slug;
+        }
+        return null;
+    };
+    for (const v of Object.values(hp)) {
+        if (v && typeof v === "object") {
+            const id = (v as any).id;
+            const imageUrl = (v as any).imageUrl;
+            if (typeof id === "string" && typeof imageUrl === "string") {
+                const slug = resolveSlugByAnyId(id);
+                if (slug) map[slug] = imageUrl;
+            }
+        }
+    }
+    return map;
+}
+
+// 依首頁 flows 順序回傳 imageUrl（用於與 getHomepageFlows(3) 搭配，避免補位造成圖片缺漏）
+export function getHomepageImagesByIndex(): Array<string | undefined> {
+    const raw = loadRaw();
+    const hp = raw.homepage?.flows || {};
+    const ordered = Object.entries(hp)
+        .map(([k, v]) => {
+            const idx = Number(k);
+            const imageUrl = v && typeof v === "object" ? (v as any).imageUrl : undefined;
+            return { idx, imageUrl };
+        })
+        .filter((x) => Number.isFinite(x.idx))
+        .sort((a, b) => a.idx - b.idx);
+    return ordered.map((o) => (typeof o.imageUrl === "string" ? o.imageUrl : undefined));
 }
 
 export type FlowValidationError = { kind: "unsupported-step-type" | "invalid-reference"; message: string };
