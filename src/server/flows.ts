@@ -12,7 +12,10 @@ export type Flow = {
     steps: FlowStep[];
 };
 
-export type FlowsFile = { flows: Record<string, Flow> };
+export type FlowsFile = {
+    flows: Record<string, Flow>;
+    homepage?: { flows?: Record<string, string> };
+};
 
 // 簡化：每次讀取檔案（檔案小，效能可接受）。如需快取可再加入 fs.stat 判斷。
 
@@ -36,6 +39,39 @@ export function getAllFlows(): Flow[] {
 export function getFlowBySlug(slug: string): Flow | null {
     const flows = getAllFlows();
     return flows.find((f) => f.slug === slug) ?? null;
+}
+
+// 回傳依照 flows.json -> homepage.flows 指定順序的清單（僅公開項目），不滿足時以公開清單補足
+export function getHomepageFlows(limit: number = 3): Flow[] {
+    const raw = loadRaw();
+    const allPublic = Object.values(raw.flows).filter(
+        (f) => (f.metadata?.visibility ?? "public") === "public"
+    );
+    const result: Flow[] = [];
+    const pickedSlugs = new Set<string>();
+    const hp = raw.homepage?.flows || {};
+    const ordered = Object.entries(hp)
+        .map(([k, id]) => ({ idx: Number(k), id }))
+        .filter((x) => Number.isFinite(x.idx) && typeof x.id === "string")
+        .sort((a, b) => a.idx - b.idx);
+    for (const { id } of ordered) {
+        const flow = raw.flows[id];
+        if (!flow) continue;
+        if ((flow.metadata?.visibility ?? "public") !== "public") continue;
+        if (pickedSlugs.has(flow.slug)) continue;
+        result.push(flow);
+        pickedSlugs.add(flow.slug);
+        if (result.length >= limit) break;
+    }
+    if (result.length < limit) {
+        for (const f of allPublic) {
+            if (pickedSlugs.has(f.slug)) continue;
+            result.push(f);
+            pickedSlugs.add(f.slug);
+            if (result.length >= limit) break;
+        }
+    }
+    return result.slice(0, limit);
 }
 
 export type FlowValidationError = { kind: "unsupported-step-type" | "invalid-reference"; message: string };
