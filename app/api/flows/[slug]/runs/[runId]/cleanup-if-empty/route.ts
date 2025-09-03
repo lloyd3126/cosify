@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/server/auth";
 import { db, schema } from "@/server/db";
-import { getFlowBySlug } from "@/server/flows";
+import { getFlowBySlug, type FlowStep } from "@/server/flows";
 import { r2 } from "@/server/r2";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { eq } from "drizzle-orm";
@@ -21,7 +21,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     const flow = getFlowBySlug(slug);
     if (!flow) return NextResponse.json({ deleted: false, reason: "flow-missing" }, { status: 404 });
 
-    const genStepIds = flow.steps.filter(s => (s as any).type === "imgGenerator").map(s => s.id);
+    const isImgGenerator = (s: FlowStep): s is Extract<FlowStep, { type: "imgGenerator" }> => s.type === "imgGenerator";
+    const genStepIds = flow.steps.filter(isImgGenerator).map(s => s.id);
 
     // 若流程沒有任何 imgGenerator 步驟，視為不可刪除（避免誤刪）
     if (genStepIds.length === 0) return NextResponse.json({ deleted: false, reason: "no-generator-steps" });

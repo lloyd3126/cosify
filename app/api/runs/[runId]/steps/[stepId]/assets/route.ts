@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ runId: str
             temperature: body.temperature,
             model: body.model,
             prompt: body.prompt,
-            meta: body.meta ? JSON.stringify(body.meta) : null as any,
+            meta: body.meta ? JSON.stringify(body.meta) : null,
             createdAt: new Date(),
         }).onConflictDoNothing();
         return NextResponse.json({ id });

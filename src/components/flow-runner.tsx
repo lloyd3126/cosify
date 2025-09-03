@@ -1035,7 +1035,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                     // 使用目前時間作為補入項的 doneAt，讓排序穩定
                                     doneMap.set(adoptedKeyNow, { id: `adopted-${stepId}`, status: "done", key: adoptedKeyNow, doneAt: Date.now(), source: "adopted" });
                                 }
-                                let doneMerged = Array.from(doneMap.values());
+                                const doneMerged = Array.from(doneMap.values());
                                 // 以來源權重排序（adopted:0, db:1, queue:2）；另外「目前已採用的 key」一律視為權重 0
                                 doneMerged.sort((a, b) => {
                                     const isCurr = (e: typeof a) => (typeof adoptedKeyNow === "string" && adoptedKeyNow && e.key === adoptedKeyNow);
@@ -1142,7 +1142,7 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                                         fetch(`/api/runs/${encodeURIComponent(runId!)}/steps/${encodeURIComponent(sid)}/assets`)
                                                                                             .then((r) => r.ok ? r.json() : null)
                                                                                             .then((data) => {
-                                                                                                const again = data?.assets?.find((a: any) => a.r2Key === key);
+                                                                                                const again = data?.assets?.find((a: { id: string; r2Key: string }) => a.r2Key === key);
                                                                                                 if (again) void tryAdopt(again.id).catch((err) => toast.error(err.message));
                                                                                             })
                                                                                             .catch(() => { /* ignore */ });

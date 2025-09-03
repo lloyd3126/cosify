@@ -57,7 +57,9 @@ export function getHomepageFlows(limit: number = 3): Flow[] {
             const idx = Number(k);
             let id: string | null = null;
             if (typeof v === "string") id = v;
-            else if (v && typeof v === "object" && typeof (v as any).id === "string") id = (v as any).id;
+            else if (v && typeof v === "object" && "id" in (v as Record<string, unknown>) && typeof (v as Record<string, unknown>)["id"] === "string") {
+                id = (v as Record<string, unknown>)["id"] as string;
+            }
             return { idx, id };
         })
         .filter((x) => Number.isFinite(x.idx) && typeof x.id === "string" && !!x.id)
@@ -105,8 +107,9 @@ export function getHomepageFlowImages(): Record<string, string> {
     };
     for (const v of Object.values(hp)) {
         if (v && typeof v === "object") {
-            const id = (v as any).id;
-            const imageUrl = (v as any).imageUrl;
+            const rec = v as Record<string, unknown>;
+            const id = rec["id"];
+            const imageUrl = rec["imageUrl"];
             if (typeof id === "string" && typeof imageUrl === "string") {
                 const slug = resolveSlugByAnyId(id);
                 if (slug) map[slug] = imageUrl;
@@ -123,7 +126,7 @@ export function getHomepageImagesByIndex(): Array<string | undefined> {
     const ordered = Object.entries(hp)
         .map(([k, v]) => {
             const idx = Number(k);
-            const imageUrl = v && typeof v === "object" ? (v as any).imageUrl : undefined;
+            const imageUrl = v && typeof v === "object" ? (v as Record<string, unknown>)["imageUrl"] : undefined;
             return { idx, imageUrl };
         })
         .filter((x) => Number.isFinite(x.idx))

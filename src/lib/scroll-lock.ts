@@ -19,8 +19,8 @@ export function lockBodyScroll() {
     if (count === 0) {
         const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
         // If using CSS scrollbar-gutter: stable, avoid double-compensation via padding
-        const htmlStyles = window.getComputedStyle(document.documentElement as HTMLElement) as any;
-        const gutterSetting: string = (htmlStyles?.scrollbarGutter as string) || "";
+        const htmlStyles: CSSStyleDeclaration = window.getComputedStyle(document.documentElement as HTMLElement);
+        const gutterSetting = htmlStyles.getPropertyValue("scrollbar-gutter") || "";
         const usesStableGutter = gutterSetting.includes("stable");
         const cs = window.getComputedStyle(body);
         const pr = parseFloat(cs.paddingRight || "0") || 0;

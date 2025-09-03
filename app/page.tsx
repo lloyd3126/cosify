@@ -35,7 +35,7 @@ export default function Home() {
                                     href={`/flows/${flow.slug}/new`}
                                     className="snap-start shrink-0 w-[85%] sm:w-[48%] md:w-[32%]"
                                 >
-                                    <Card className="overflow-hidden hover:bg-muted/30 border pt-0 pb-6">
+                                    <Card className="overflow-hidden hover:bg-muted/30 border p-0">
                                         <div className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
                                             <Image
                                                 src={imagesByIndex[idx] || images[flow.slug] || flow.metadata?.thumbnail || "/vercel.svg"}
