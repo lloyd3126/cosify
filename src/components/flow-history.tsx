@@ -241,28 +241,24 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
         <>
             <div className="mx-auto max-w-5xl p-6 space-y-6">
                 <Toaster richColors />
-                {slug === "cosplay-generation" ? (
-                    <div className="flex items-center justify-between">
-                        <Link
-                            href={currentRunId ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}` : `/flows/${encodeURIComponent(slug)}/new`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="返回"
-                        >
-                            <ArrowLeftFromLine className="h-5 w-5" />
-                        </Link>
-                        <div className="flex-1" />
-                        <Link
-                            href={`/flows/${encodeURIComponent(slug)}/new`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="開起新的任務"
-                            title="開起新的任務"
-                        >
-                            <FilePlus2 className="h-5 w-5" />
-                        </Link>
-                    </div>
-                ) : (
-                    <h1 className="text-2xl font-semibold">歷史紀錄 - {flowName}</h1>
-                )}
+                <div className="flex items-center justify-between">
+                    <Link
+                        href={currentRunId ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}` : `/flows/${encodeURIComponent(slug)}/new`}
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="返回"
+                    >
+                        <ArrowLeftFromLine className="h-5 w-5" />
+                    </Link>
+                    <div className="flex-1" />
+                    <Link
+                        href={`/flows/${encodeURIComponent(slug)}/new`}
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="開起新的任務"
+                        title="開起新的任務"
+                    >
+                        <FilePlus2 className="h-5 w-5" />
+                    </Link>
+                </div>
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
                 <div className="space-y-4">
                     {runs.map((r) => (
@@ -397,33 +393,37 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                 src={lbSrc}
                 onClose={() => { setLbOpen(false); setLbKeys([]); setLbIndex(0); setLbSrc(null); }}
                 onPrev={async () => {
-                    if (lbIndex <= 0) return;
-                    const nextIdx = lbIndex - 1;
+                    const total = lbKeys.length;
+                    if (total <= 1) return;
+                    const nextIdx = lbIndex <= 0 ? (total - 1) : (lbIndex - 1);
                     const key = lbKeys[nextIdx];
                     try {
                         const url = await ensureBlobUrlForKey(key);
                         setLbIndex(nextIdx);
                         setLbSrc(url);
-                        // 預載更左邊
-                        const moreLeft = nextIdx - 1 >= 0 ? lbKeys[nextIdx - 1] : null;
+                        // 預載更左邊（循環）
+                        const moreLeftIdx = nextIdx - 1 >= 0 ? (nextIdx - 1) : (total - 1);
+                        const moreLeft = lbKeys[moreLeftIdx] ?? null;
                         if (moreLeft) void ensureBlobUrlForKey(moreLeft).catch(() => { });
                     } catch { }
                 }}
                 onNext={async () => {
-                    if (lbIndex >= lbKeys.length - 1) return;
-                    const nextIdx = lbIndex + 1;
+                    const total = lbKeys.length;
+                    if (total <= 1) return;
+                    const nextIdx = lbIndex >= total - 1 ? 0 : (lbIndex + 1);
                     const key = lbKeys[nextIdx];
                     try {
                         const url = await ensureBlobUrlForKey(key);
                         setLbIndex(nextIdx);
                         setLbSrc(url);
-                        // 預載更右邊
-                        const moreRight = nextIdx + 1 < lbKeys.length ? lbKeys[nextIdx + 1] : null;
+                        // 預載更右邊（循環）
+                        const moreRightIdx = nextIdx + 1 < total ? (nextIdx + 1) : 0;
+                        const moreRight = lbKeys[moreRightIdx] ?? null;
                         if (moreRight) void ensureBlobUrlForKey(moreRight).catch(() => { });
                     } catch { }
                 }}
-                canPrev={lbIndex > 0}
-                canNext={lbIndex < lbKeys.length - 1}
+                canPrev={lbKeys.length > 1}
+                canNext={lbKeys.length > 1}
             />
             {/* 刪除確認對話框 */}
             <ConfirmDialog

@@ -895,8 +895,9 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                 onClose={() => { setLightbox({ open: false, src: null, alt: null, index: null }); setModalNav(null); }}
                 onPrev={() => {
                     if (modalNav) {
-                        if (modalNav.index <= 0) return;
-                        const newIdx = modalNav.index - 1;
+                        const total = modalNav.keys.length;
+                        if (total <= 0) return;
+                        const newIdx = modalNav.index <= 0 ? (total - 1) : (modalNav.index - 1);
                         const key = modalNav.keys[newIdx];
                         ensureBlobUrlForKey(key).then((url) => {
                             setLightbox({ open: true, src: url, alt: flow.steps.find(s => s.id === modalNav.stepId)?.name ?? "", index: null });
@@ -905,27 +906,40 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                         return;
                     }
                     if (lightbox.index == null) return;
+                    let navigated = false;
+                    // Search backwards from current-1 to 0
                     for (let i = lightbox.index - 1; i >= 0; i--) {
                         const s = flow.steps[i];
                         if (s.type === "uploader") {
-                            if (files[s.id]) {
-                                const url = uploaderUrlsRef.current[s.id];
-                                if (url) { setLightbox({ open: true, src: url, alt: s.name, index: i }); }
-                                break;
-                            }
+                            const localUrl = uploaderUrlsRef.current[s.id];
+                            if (localUrl) { setLightbox({ open: true, src: localUrl, alt: s.name, index: i }); navigated = true; break; }
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); navigated = true; break; }
                         } else if (s.type === "imgGenerator") {
                             const key = keys[s.id];
-                            if (typeof key === "string" && key) {
-                                ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i }));
-                                break;
-                            }
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); navigated = true; break; }
+                        }
+                    }
+                    if (navigated) return;
+                    // Wrap-around: search from end to current+1
+                    for (let i = flow.steps.length - 1; i > lightbox.index; i--) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            const localUrl = uploaderUrlsRef.current[s.id];
+                            if (localUrl) { setLightbox({ open: true, src: localUrl, alt: s.name, index: i }); break; }
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); break; }
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); break; }
                         }
                     }
                 }}
                 onNext={() => {
                     if (modalNav) {
-                        if (modalNav.index >= modalNav.keys.length - 1) return;
-                        const newIdx = modalNav.index + 1;
+                        const total = modalNav.keys.length;
+                        if (total <= 0) return;
+                        const newIdx = modalNav.index >= total - 1 ? 0 : (modalNav.index + 1);
                         const key = modalNav.keys[newIdx];
                         ensureBlobUrlForKey(key).then((url) => {
                             setLightbox({ open: true, src: url, alt: flow.steps.find(s => s.id === modalNav.stepId)?.name ?? "", index: null });
@@ -934,30 +948,57 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                         return;
                     }
                     if (lightbox.index == null) return;
+                    let navigated = false;
+                    // Search forwards from current+1 to end
                     for (let i = lightbox.index + 1; i < flow.steps.length; i++) {
                         const s = flow.steps[i];
                         if (s.type === "uploader") {
-                            if (files[s.id]) {
-                                const url = uploaderUrlsRef.current[s.id];
-                                if (url) { setLightbox({ open: true, src: url, alt: s.name, index: i }); }
-                                break;
-                            }
+                            const localUrl = uploaderUrlsRef.current[s.id];
+                            if (localUrl) { setLightbox({ open: true, src: localUrl, alt: s.name, index: i }); navigated = true; break; }
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); navigated = true; break; }
                         } else if (s.type === "imgGenerator") {
                             const key = keys[s.id];
-                            if (typeof key === "string" && key) {
-                                ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i }));
-                                break;
-                            }
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); navigated = true; break; }
+                        }
+                    }
+                    if (navigated) return;
+                    // Wrap-around: search from 0 to current-1
+                    for (let i = 0; i < lightbox.index; i++) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            const localUrl = uploaderUrlsRef.current[s.id];
+                            if (localUrl) { setLightbox({ open: true, src: localUrl, alt: s.name, index: i }); break; }
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); break; }
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) { ensureBlobUrlForKey(key).then((url) => setLightbox({ open: true, src: url, alt: s.name, index: i })); break; }
                         }
                     }
                 }}
                 canPrev={(() => {
-                    if (modalNav) return modalNav.index > 0;
+                    if (modalNav) return (modalNav.keys.length > 1);
                     if (lightbox.index == null) return false;
+                    // Check any available item before current
                     for (let i = lightbox.index - 1; i >= 0; i--) {
                         const s = flow.steps[i];
                         if (s.type === "uploader") {
-                            if (files[s.id]) return true;
+                            if (uploaderUrlsRef.current[s.id]) return true;
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
+                        }
+                    }
+                    // Wrap-around: check any available item after current
+                    for (let i = flow.steps.length - 1; i > lightbox.index; i--) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            if (uploaderUrlsRef.current[s.id]) return true;
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
                         } else if (s.type === "imgGenerator") {
                             const key = keys[s.id];
                             if (typeof key === "string" && key) return true;
@@ -966,12 +1007,27 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                     return false;
                 })()}
                 canNext={(() => {
-                    if (modalNav) return modalNav.index < modalNav.keys.length - 1;
+                    if (modalNav) return (modalNav.keys.length > 1);
                     if (lightbox.index == null) return false;
+                    // Check any available item after current
                     for (let i = lightbox.index + 1; i < flow.steps.length; i++) {
                         const s = flow.steps[i];
                         if (s.type === "uploader") {
-                            if (files[s.id]) return true;
+                            if (uploaderUrlsRef.current[s.id]) return true;
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
+                        } else if (s.type === "imgGenerator") {
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
+                        }
+                    }
+                    // Wrap-around: check any available item before current
+                    for (let i = 0; i < lightbox.index; i++) {
+                        const s = flow.steps[i];
+                        if (s.type === "uploader") {
+                            if (uploaderUrlsRef.current[s.id]) return true;
+                            const key = keys[s.id];
+                            if (typeof key === "string" && key) return true;
                         } else if (s.type === "imgGenerator") {
                             const key = keys[s.id];
                             if (typeof key === "string" && key) return true;

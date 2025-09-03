@@ -59,13 +59,105 @@
                 }
             ]
         },
+        "E4D23C5E-4B5E-48F6-B637-E8B48738A5E6": {
+            "name": "球員轉隊模擬照",
+            "slug": "jersey-tryon",
+            "metadata": {
+                "description": "上傳球員與未來隊友的照片後生成轉隊模擬照",
+                "thumbnail": "/vercel.svg",
+                "visibility": "public"
+            },
+            "steps": [
+                {
+                    "id": "1A4A317B-F0A6-43A3-820D-92DEF65D0F46",
+                    "name": "上傳球員照",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "E3323B1F-9C52-4F42-A805-1D88B5A9896C",
+                    "name": "上傳未來隊友照",
+                    "type": "uploader",
+                    "data": {}
+                },
+                {
+                    "id": "E33B27FF-6937-4FD5-BE4C-D23949A75681",
+                    "name": "生成轉隊後的球衣",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "convert the jersey into a flat lay jersey.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "E3323B1F-9C52-4F42-A805-1D88B5A9896C"
+                        ]
+                    }
+                },
+                {
+                    "id": "CB492A34-1BAE-4781-9BF4-D3EA69F9B7EE",
+                    "name": "修改球衣的編號",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Replace the number on the flat lay jersey (image 2) so it exactly matches the player's jersey number from image 1. Preserve all design elements (team logo, sponsor marks, stripes, colors), fabric texture, stitching, shadows, and the flat lay perspective. Match the existing number style (font, size, color, outline/stroke, placement). Update every visible number on the jersey. Keep the background clean and do not change anything else.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "1A4A317B-F0A6-43A3-820D-92DEF65D0F46",
+                            "E33B27FF-6937-4FD5-BE4C-D23949A75681"
+                        ]
+                    }
+                },
+                {
+                    "id": "DB11A28B-8736-454E-9B26-DD338F02E60C",
+                    "name": "生成轉隊後的球褲",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "convert the shorts into a flat lay shorts.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "E3323B1F-9C52-4F42-A805-1D88B5A9896C"
+                        ]
+                    }
+                },
+                {
+                    "id": "151BEB1B-8D3F-48FA-B33C-85AE28E34596",
+                    "name": "修改球褲的編號",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Replace the number on the flat lay shorts (image 2) so it exactly matches the player's shorts number from image 1. Preserve all design elements (team logo, sponsor marks, stripes, colors), fabric texture, stitching, shadows, and the flat lay perspective. Match the existing number style (font, size, color, outline/stroke, placement). Update every visible number on the shorts. Keep the background clean and do not change anything else.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "1A4A317B-F0A6-43A3-820D-92DEF65D0F46",
+                            "DB11A28B-8736-454E-9B26-DD338F02E60C"
+                        ]
+                    }
+                },
+                {
+                    "id": "1CE85404-2B83-42C5-8D7F-F2679F6A16EA",
+                    "name": "生成轉隊模擬照",
+                    "type": "imgGenerator",
+                    "data": {
+                        "model": "gemini-2.5-flash-image-preview",
+                        "prompt": "Dress the player from image 3 in the full uniform composed of the jersey from image 1 and the shorts from image 2. Maintain the original background, camera angle, lighting, and pose from image 3. Preserve the player's identity, face, hairstyle, skin tone, and body proportions. Fit the garments naturally with correct perspective, fabric drape, seams, shadows, and reflections. Keep all logos, team colors, and numbers on the jersey and shorts intact and consistent. Recolor all accessories (shoes, socks, wristbands, armbands, sleeves, headbands) to white while preserving material textures, shading, and brand details. Do not change anything else.",
+                        "temperature": 1,
+                        "referenceImgs": [
+                            "CB492A34-1BAE-4781-9BF4-D3EA69F9B7EE",
+                            "151BEB1B-8D3F-48FA-B33C-85AE28E34596",
+                            "1A4A317B-F0A6-43A3-820D-92DEF65D0F46"
+                        ]
+                    }
+                }
+            ]
+        },
         "5007B1CF-7EFC-4C29-B976-080BA7D5D644": {
             "name": "我也想當 cosplayer",
             "slug": "cosplay-selfie-generation-1",
             "metadata": {
                 "description": "上傳角色圖與個人照生成自己的 cosplay 照",
                 "thumbnail": "/vercel.svg",
-                "visibility": "public"
+                "visibility": "private"
             },
             "steps": [
                 {
@@ -142,7 +234,7 @@
             "metadata": {
                 "description": "上傳角色圖與個人照後模擬該角色的扮演照",
                 "thumbnail": "/vercel.svg",
-                "visibility": "public"
+                "visibility": "private"
             },
             "steps": [
                 {
@@ -232,7 +324,7 @@
             "metadata": {
                 "description": "Archived",
                 "thumbnail": "/vercel.svg",
-                "visibility": "public"
+                "visibility": "private"
             },
             "steps": [
                 {
