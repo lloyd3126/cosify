@@ -24,7 +24,7 @@ export default function Home() {
             </div>
 
             {/* 新版功能輪播（依照網站功能展示各 Flow） */}
-            <div className="space-y-3">
+            <div className="space-y-3 mb-10">
                 {/* CSS 滾動輪播（scroll-snap） */}
                 <div className="relative">
                     <div className="-mx-6 overflow-x-auto px-6">

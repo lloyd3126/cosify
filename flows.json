@@ -63,7 +63,7 @@
             "name": "我也想當 cosplayer",
             "slug": "cosplay-selfie-generation-1",
             "metadata": {
-                "description": "上傳角色圖與個人照，生成最終 cosplay 照的 4 階段流程。",
+                "description": "上傳角色圖與個人照生成自己的 cosplay 照",
                 "thumbnail": "/vercel.svg",
                 "visibility": "public"
             },
