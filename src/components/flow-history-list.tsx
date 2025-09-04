@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
-import { Download } from "lucide-react";
+import { Download, Play, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Trash } from "lucide-react";
 
 export type FlowHistoryListRun = {
     runId: string;
@@ -14,7 +14,7 @@ export type FlowHistoryListRun = {
     itemsTotal: number;
 };
 
-export function FlowHistoryList({ runs }: { runs: FlowHistoryListRun[] }) {
+export function FlowHistoryList({ runs, showDelete = true }: { runs: FlowHistoryListRun[], showDelete?: boolean }) {
     const [cols, setCols] = useState(3);
     const [lbOpen, setLbOpen] = useState(false);
     const [lbKeys, setLbKeys] = useState<string[]>([]);
@@ -79,6 +79,12 @@ export function FlowHistoryList({ runs }: { runs: FlowHistoryListRun[] }) {
         return `${y}/${m}/${day} ${hh}:${mm}:${ss}`;
     };
 
+    // 展開/收合/載入/刪除/顯示狀態按鈕
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const [loading, setLoading] = useState<Record<string, boolean>>({});
+    const [deleted, setDeleted] = useState<Record<string, boolean>>({});
+    const [visible, setVisible] = useState<Record<string, boolean>>({});
+
     return (
         <div className="space-y-4">
             <Toaster richColors />
@@ -86,6 +92,54 @@ export function FlowHistoryList({ runs }: { runs: FlowHistoryListRun[] }) {
                 <Card key={r.runId} className="p-4 space-y-3 rounded-md gap-3">
                     <div className="flex items-center justify-between m-0">
                         <div className="text-sm text-black">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
+                        <div className="flex items-center gap-2">
+                            {/* 展開/收合按鈕（icon） */}
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => setExpanded(e => ({ ...e, [r.runId]: !e[r.runId] }))}
+                                aria-label={expanded[r.runId] ? "收合" : "展開"}
+                            >
+                                {expanded[r.runId] ? (
+                                    <ChevronsDownUp className="h-4 w-4" />
+                                ) : (
+                                    <ChevronsUpDown className="h-4 w-4" />
+                                )}
+                            </Button>
+                            {/* 載入按鈕（Play icon） */}
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                disabled={loading[r.runId]}
+                                onClick={() => setLoading(l => ({ ...l, [r.runId]: true }))}
+                                aria-label="載入"
+                            >
+                                <Play className="h-4 w-4" />
+                            </Button>
+                            {/* 顯示/隱藏按鈕（僅 history 頁面 showDelete=true 時顯示） */}
+                            {showDelete && (
+                                <Button
+                                    size="icon"
+                                    variant="outline"
+                                    onClick={() => setVisible(v => ({ ...v, [r.runId]: !v[r.runId] }))}
+                                    aria-label={visible[r.runId] ? "隱藏" : "顯示"}
+                                >
+                                    {visible[r.runId] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </Button>
+                            )}
+                            {/* 刪除按鈕（根據 props 控制顯示） */}
+                            {showDelete && (
+                                <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="bg-white text-black border hover:bg-white/90"
+                                    onClick={() => setDeleted(d => ({ ...d, [r.runId]: true }))}
+                                    aria-label="刪除"
+                                >
+                                    <Trash className="h-4 w-4 text-black" />
+                                </Button>
+                            )}
+                        </div>
                     </div>
                     <div className={gridColsClass}>
                         {r.itemsPreview.slice(0, cols).map((it, i) => (

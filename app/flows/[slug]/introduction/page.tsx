@@ -104,7 +104,7 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                 </div>
 
             </div>
-            <FlowHistoryList runs={runs} />
+            <FlowHistoryList runs={runs} showDelete={false} />
         </div>
     );
 }
