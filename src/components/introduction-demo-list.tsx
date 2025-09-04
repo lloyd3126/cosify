@@ -1,8 +1,10 @@
 "use client";
 import React from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { ToggleRunPublicButton } from "@/components/toggle-run-public-button";
 import { ShareRunIdButton } from "@/components/share-runid-button";
+import { getOptimizedImageUrl } from "@/lib/image-utils";
 
 const DemoRunPreview = dynamic(() => import("@/components/demo-run-preview").then(mod => ({ default: mod.DemoRunPreview })), { ssr: false });
 
@@ -43,12 +45,15 @@ export function IntroductionDemoList({ demoRunIds }: { demoRunIds: string[] }) {
                     </div>
                     <div className="flex flex-wrap gap-2 mb-2">
                         {itemsByRun[runId]?.slice(0, 5).map(item => (
-                            <img
-                                key={item.r2Key}
-                                src={"/api/r2/" + encodeURIComponent(item.r2Key)}
-                                alt={runId}
-                                className="w-32 h-32 object-cover rounded border"
-                            />
+                            <div key={item.r2Key} className="w-32 h-32 relative overflow-hidden rounded border">
+                                <Image
+                                    src={getOptimizedImageUrl(item.r2Key, { width: 300, quality: 80 })}
+                                    alt={`Demo ${runId}`}
+                                    fill
+                                    className="object-cover"
+                                    sizes="128px"
+                                />
+                            </div>
                         ))}
                     </div>
                 </div>
