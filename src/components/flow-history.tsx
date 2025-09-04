@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { FlowHistoryList, FlowHistoryListRun } from "@/components/flow-history-list";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
@@ -260,171 +261,14 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                     </Link>
                 </div>
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
-                <div className="space-y-4">
-                    {runs.map((r) => (
-                        <Card key={r.runId} className="p-4 space-y-3 rounded-md gap-3">
-                            <div className="flex items-center justify-between m-0">
-                                <div className="text-sm text-black">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
-                                <div className="flex items-center gap-2">
-                                    {(() => {
-                                        const isExpanded = expandedUI.has(r.runId);
-                                        const canExpand = r.itemsTotal > cols;
-                                        if (!(isExpanded || canExpand)) return null;
-                                        return (
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                className="bg-white text-black border hover:bg-white/90"
-                                                disabled={expanding.has(r.runId)}
-                                                onClick={() => toggleExpand(r.runId)}
-                                                aria-label={isExpanded ? "收合" : "展開"}
-                                                title={isExpanded ? "收合" : "展開"}
-                                            >
-                                                {expanding.has(r.runId) ? (
-                                                    // 保留載入中文字避免誤導，但以簡短寬度顯示
-                                                    <span className="text-xs">…</span>
-                                                ) : isExpanded ? (
-                                                    <ChevronsDownUp className="h-4 w-4" />
-                                                ) : (
-                                                    <ChevronsUpDown className="h-4 w-4" />
-                                                )}
-                                            </Button>
-                                        );
-                                    })()}
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        className="bg-white text-black border hover:bg-white/90"
-                                        onClick={() => router.push(`/flows/${slug}?runId=${encodeURIComponent(r.runId)}`)}
-                                        aria-label="返回"
-                                        title="返回"
-                                    >
-                                        <ArchiveRestore className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        className="bg-white text-black border hover:bg-white/90"
-                                        onClick={() => setConfirmDelete({ runId: r.runId })}
-                                        aria-label="刪除"
-                                        title="刪除"
-                                    >
-                                        <Trash className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                            {!expandedUI.has(r.runId) ? (
-                                <div className={gridColsClass}>
-                                    {r.itemsPreview.slice(0, cols).map((it, i) => (
-                                        <div
-                                            key={`${it.r2Key}-${i}`}
-                                            className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
-                                            style={{ aspectRatio: "1 / 1" }}
-                                            onClick={() => openRunLightbox(r.runId, it.r2Key)}
-                                            role="button"
-                                            aria-label="預覽"
-                                        >
-                                            <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover" />
-                                            {/* hover overlay actions */}
-                                            <div className="absolute inset-0 opacity-0 pointer-events-none transition-opacity bg-black/40 group-hover:opacity-100 group-hover:pointer-events-auto">
-                                                <div className="absolute inset-x-0 bottom-0 p-2 pointer-events-auto">
-                                                    <div className="flex justify-end">
-                                                        <Button
-                                                            size="sm"
-                                                            className="bg-black text-white hover:bg-black/90"
-                                                            onClick={(e) => { e.stopPropagation(); downloadByKey(it.r2Key); }}
-                                                            aria-label="下載"
-                                                        >
-                                                            <Download className="h-4 w-4 text-white" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className={gridColsClass}>
-                                    {(expanded[r.runId] || []).map((it, i) => (
-                                        <div
-                                            key={`${it.r2Key}-${i}`}
-                                            className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
-                                            style={{ aspectRatio: "1 / 1" }}
-                                            onClick={() => openRunLightbox(r.runId, it.r2Key)}
-                                            role="button"
-                                            aria-label="預覽"
-                                        >
-                                            <Image src={`/api/r2/${it.r2Key}`} alt="thumb" fill className="object-cover" />
-                                            {/* hover overlay actions */}
-                                            <div className="absolute inset-0 opacity-0 pointer-events-none transition-opacity bg-black/40 group-hover:opacity-100 group-hover:pointer-events-auto">
-                                                <div className="absolute inset-x-0 bottom-0 p-2 pointer-events-auto">
-                                                    <div className="flex justify-end">
-                                                        <Button
-                                                            size="sm"
-                                                            className="bg-black text-white hover:bg-black/90"
-                                                            onClick={(e) => { e.stopPropagation(); downloadByKey(it.r2Key); }}
-                                                            aria-label="下載"
-                                                        >
-                                                            <Download className="h-4 w-4 text-white" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {(!expanded[r.runId] || expanded[r.runId]!.length === 0) && expanding.has(r.runId) ? (
-                                        <div className="text-sm text-muted-foreground">讀取中…</div>
-                                    ) : null}
-                                </div>
-                            )}
-                        </Card>
-                    ))}
-                    {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
-                    {hasMore ? (
-                        <div className="pt-2">
-                            <Button className="w-full" disabled={loading} onClick={() => load(false)}>載入更多</Button>
-                        </div>
-                    ) : null}
-                </div>
+                <FlowHistoryList runs={runs as FlowHistoryListRun[]} />
+                {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
+                {hasMore ? (
+                    <div className="pt-2">
+                        <Button className="w-full" disabled={loading} onClick={() => load(false)}>載入更多</Button>
+                    </div>
+                ) : null}
             </div>
-            {/* Lightbox：同一個 run 內左右切換；使用本地快取的 blob URL */}
-            <Lightbox
-                open={lbOpen}
-                src={lbSrc}
-                onClose={() => { setLbOpen(false); setLbKeys([]); setLbIndex(0); setLbSrc(null); }}
-                onPrev={async () => {
-                    const total = lbKeys.length;
-                    if (total <= 1) return;
-                    const nextIdx = lbIndex <= 0 ? (total - 1) : (lbIndex - 1);
-                    const key = lbKeys[nextIdx];
-                    try {
-                        const url = await ensureBlobUrlForKey(key);
-                        setLbIndex(nextIdx);
-                        setLbSrc(url);
-                        // 預載更左邊（循環）
-                        const moreLeftIdx = nextIdx - 1 >= 0 ? (nextIdx - 1) : (total - 1);
-                        const moreLeft = lbKeys[moreLeftIdx] ?? null;
-                        if (moreLeft) void ensureBlobUrlForKey(moreLeft).catch(() => { });
-                    } catch { }
-                }}
-                onNext={async () => {
-                    const total = lbKeys.length;
-                    if (total <= 1) return;
-                    const nextIdx = lbIndex >= total - 1 ? 0 : (lbIndex + 1);
-                    const key = lbKeys[nextIdx];
-                    try {
-                        const url = await ensureBlobUrlForKey(key);
-                        setLbIndex(nextIdx);
-                        setLbSrc(url);
-                        // 預載更右邊（循環）
-                        const moreRightIdx = nextIdx + 1 < total ? (nextIdx + 1) : 0;
-                        const moreRight = lbKeys[moreRightIdx] ?? null;
-                        if (moreRight) void ensureBlobUrlForKey(moreRight).catch(() => { });
-                    } catch { }
-                }}
-                canPrev={lbKeys.length > 1}
-                canNext={lbKeys.length > 1}
-            />
             {/* 刪除確認對話框 */}
             <ConfirmDialog
                 open={!!confirmDelete.runId}

@@ -32,7 +32,7 @@ export default function Home() {
                             {flows.map((flow, idx) => (
                                 <Link
                                     key={flow.slug}
-                                    href={`/flows/${flow.slug}/new`}
+                                    href={`/flows/${flow.slug}/introduction`}
                                     className="snap-start shrink-0 w-[85%] sm:w-[48%] md:w-[32%]"
                                 >
                                     <Card className="overflow-hidden hover:bg-muted/30 border p-0">
@@ -50,7 +50,7 @@ export default function Home() {
                                                 <div className="text-sm text-muted-foreground mt-1 line-clamp-2">{flow.metadata.description}</div>
                                             ) : null}
                                             <div className="pt-3">
-                                                <Button className="w-full" variant="secondary">開始</Button>
+                                                <Button className="w-full" variant="secondary">進入介紹</Button>
                                             </div>
                                         </div>
                                     </Card>

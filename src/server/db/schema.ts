@@ -121,6 +121,7 @@ export const flowRuns = sqliteTable("flow_runs", {
     slug: text("slug").notNull(),
     status: text("status").notNull().default("active"),
     error: text("error"),
+    public: integer("public", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at", { mode: "timestamp" })
         .$defaultFn(() => new Date())
         .notNull(),

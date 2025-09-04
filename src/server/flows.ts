@@ -10,6 +10,11 @@ export type Flow = {
     slug: string;
     metadata?: { description?: string; thumbnail?: string; visibility?: "public" | "private" };
     steps: FlowStep[];
+    introduction?: {
+        title?: string;
+        description?: string;
+        demo?: string[];
+    };
 };
 
 export type FlowsFile = {
@@ -35,12 +40,16 @@ function loadRaw(): FlowsFile {
 
 export function getAllFlows(): Flow[] {
     const { flows } = loadRaw();
-    return Object.values(flows);
+    const all = Object.values(flows);
+    console.log('getAllFlows sample:', all[0]);
+    return all;
 }
 
 export function getFlowBySlug(slug: string): Flow | null {
     const flows = getAllFlows();
-    return flows.find((f) => f.slug === slug) ?? null;
+    const found = flows.find((f) => f.slug === slug) ?? null;
+    console.log('getFlowBySlug result:', found);
+    return found;
 }
 
 // 回傳依照 flows.json -> homepage.flows 指定順序的清單（僅公開項目），不滿足時以公開清單補足

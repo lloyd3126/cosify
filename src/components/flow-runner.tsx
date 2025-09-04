@@ -8,7 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Toaster, toast } from "sonner";
-import { Download, X, WandSparkles, Grid3X3, BookmarkCheck, List, History, FilePlus2 } from "lucide-react";
+import { Download, X, WandSparkles, Grid3X3, BookmarkCheck, ArrowLeftFromLine, History, FilePlus2 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
 import HorizontalCarousel from "@/components/ui/horizontal-carousel";
 import Lightbox from "@/components/ui/lightbox";
@@ -500,11 +500,11 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                 ) : null}
                 <div className="mt-4 flex justify-center gap-2">
                     <Link
-                        href={`/flows`}
+                        href={`/flows/${slug}/introduction`}
                         className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
-                        aria-label="返回工具清單"
+                        aria-label="返回"
                     >
-                        <List className="h-4 w-4" />
+                        <ArrowLeftFromLine className="h-4 w-4" />
                     </Link>
                     {/* 開起新的任務：導向 /flows/[slug]/new 建立 run 後再 redirect */}
                     <button
