@@ -13,7 +13,13 @@ import Link from "next/link";
 
 type Props = { slug: string; flowName: string; currentRunId?: string | null };
 
-type RunPreview = { runId: string; createdAt: string; itemsPreview: Array<{ r2Key: string; createdAt: string }>; itemsTotal: number };
+type RunPreview = {
+    runId: string;
+    createdAt: string;
+    itemsPreview: Array<{ r2Key: string; createdAt: string }>;
+    allItems?: Array<{ r2Key: string; createdAt: string }>; // 新增：所有項目
+    itemsTotal: number
+};
 
 export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
     const router = useRouter();
@@ -154,20 +160,26 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
             setExpandedUI((prev) => { const n = new Set(prev); n.delete(runId); return n; });
             return;
         }
-        // 展開：若有快取直接展開；否則先載入後展開
+
+        // 立即展開 UI，不管是否有快取
+        setExpandedUI((prev) => new Set(prev).add(runId));
+
+        // 若有快取直接使用，無需 API 呼叫
         if (expanded[runId]) {
-            setExpandedUI((prev) => new Set(prev).add(runId));
             return;
         }
+
+        // 沒有快取時，背景載入資料
         setExpanding((prev) => new Set(prev).add(runId));
         try {
             const res = await fetch(`/api/flows/${slug}/history/${runId}/items`, { cache: "no-store" });
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "讀取失敗");
             setExpanded((m) => ({ ...m, [runId]: (data.items || []) as Array<{ r2Key: string; createdAt: string; kind?: string }> }));
-            setExpandedUI((prev) => new Set(prev).add(runId));
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "讀取失敗");
+            // 載入失敗時收合 UI
+            setExpandedUI((prev) => { const n = new Set(prev); n.delete(runId); return n; });
         } finally {
             setExpanding((prev) => { const n = new Set(prev); n.delete(runId); return n; });
         }
@@ -261,7 +273,15 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                     </Link>
                 </div>
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
-                <FlowHistoryList runs={runs as FlowHistoryListRun[]} />
+                <FlowHistoryList
+                    runs={runs.map(run => ({
+                        ...run,
+                        allItems: expanded[run.runId] || undefined
+                    })) as FlowHistoryListRun[]}
+                    onToggleExpand={toggleExpand}
+                    currentExpanded={Object.fromEntries(Array.from(expandedUI).map(runId => [runId, true]))}
+                    onImageClick={openRunLightbox}
+                />
                 {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
                 {hasMore ? (
                     <div className="pt-2">

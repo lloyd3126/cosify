@@ -71,6 +71,7 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                 runId,
                 createdAt: items.length > 0 ? items[0].createdAt : "",
                 itemsPreview: items.slice(0, 6).map((it: any) => ({ r2Key: it.r2Key, createdAt: it.createdAt })),
+                allItems: items.map((it: any) => ({ r2Key: it.r2Key, createdAt: it.createdAt })), // 新增：所有項目
                 itemsTotal: items.length
             };
         });
