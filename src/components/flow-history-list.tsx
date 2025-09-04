@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
-import { Download, Play, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Trash } from "lucide-react";
+import { Download, Play, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Trash, Link2, Settings } from "lucide-react";
 
 export type FlowHistoryListRun = {
     runId: string;
@@ -79,11 +79,12 @@ export function FlowHistoryList({ runs, showDelete = true }: { runs: FlowHistory
         return `${y}/${m}/${day} ${hh}:${mm}:${ss}`;
     };
 
-    // 展開/收合/載入/刪除/顯示狀態按鈕
+    // 展開/收合/載入/刪除/顯示狀態/設定展開按鈕
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState<Record<string, boolean>>({});
     const [deleted, setDeleted] = useState<Record<string, boolean>>({});
     const [visible, setVisible] = useState<Record<string, boolean>>({});
+    const [settingsOpen, setSettingsOpen] = useState<Record<string, boolean>>({});
 
     return (
         <div className="space-y-4">
@@ -93,6 +94,50 @@ export function FlowHistoryList({ runs, showDelete = true }: { runs: FlowHistory
                     <div className="flex items-center justify-between m-0">
                         <div className="text-sm text-black">{`${formatDateTime(r.createdAt)} - ${r.itemsTotal} 張`}</div>
                         <div className="flex items-center gap-2">
+                            {/* 只有 showDelete=true 才顯示 Settings 與展開內容 */}
+                            {showDelete && (
+                                <>
+                                    {settingsOpen[r.runId] && (
+                                        <>
+                                            {!visible[r.runId] && (
+                                                <Button
+                                                    size="icon"
+                                                    variant="outline"
+                                                    aria-label="連結"
+                                                >
+                                                    <Link2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="icon"
+                                                variant="outline"
+                                                onClick={() => setVisible(v => ({ ...v, [r.runId]: !v[r.runId] }))}
+                                                aria-label={visible[r.runId] ? "隱藏" : "顯示"}
+                                            >
+                                                {visible[r.runId] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="outline"
+                                                className="bg-white text-black border hover:bg-white/90"
+                                                onClick={() => setDeleted(d => ({ ...d, [r.runId]: true }))}
+                                                aria-label="刪除"
+                                            >
+                                                <Trash className="h-4 w-4 text-black" />
+                                            </Button>
+                                        </>
+                                    )}
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        aria-label="設定"
+                                        onClick={() => setSettingsOpen(o => ({ ...o, [r.runId]: !o[r.runId] }))}
+                                        className={settingsOpen[r.runId] ? "bg-muted text-black border" : ""}
+                                    >
+                                        <Settings className="h-4 w-4" />
+                                    </Button>
+                                </>
+                            )}
                             {/* 展開/收合按鈕（icon） */}
                             <Button
                                 size="icon"
@@ -116,29 +161,6 @@ export function FlowHistoryList({ runs, showDelete = true }: { runs: FlowHistory
                             >
                                 <Play className="h-4 w-4" />
                             </Button>
-                            {/* 顯示/隱藏按鈕（僅 history 頁面 showDelete=true 時顯示） */}
-                            {showDelete && (
-                                <Button
-                                    size="icon"
-                                    variant="outline"
-                                    onClick={() => setVisible(v => ({ ...v, [r.runId]: !v[r.runId] }))}
-                                    aria-label={visible[r.runId] ? "隱藏" : "顯示"}
-                                >
-                                    {visible[r.runId] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </Button>
-                            )}
-                            {/* 刪除按鈕（根據 props 控制顯示） */}
-                            {showDelete && (
-                                <Button
-                                    size="icon"
-                                    variant="outline"
-                                    className="bg-white text-black border hover:bg-white/90"
-                                    onClick={() => setDeleted(d => ({ ...d, [r.runId]: true }))}
-                                    aria-label="刪除"
-                                >
-                                    <Trash className="h-4 w-4 text-black" />
-                                </Button>
-                            )}
                         </div>
                     </div>
                     <div className={gridColsClass}>
