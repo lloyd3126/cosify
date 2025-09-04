@@ -289,6 +289,36 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                     </div>
                 ) : null}
             </div>
+            {/* Lightbox */}
+            <Lightbox
+                open={lbOpen}
+                src={lbSrc}
+                onClose={() => { setLbOpen(false); setLbKeys([]); setLbIndex(0); setLbSrc(null); }}
+                onPrev={async () => {
+                    const total = lbKeys.length;
+                    if (total <= 1) return;
+                    const nextIdx = lbIndex <= 0 ? (total - 1) : (lbIndex - 1);
+                    const key = lbKeys[nextIdx];
+                    try {
+                        const url = await ensureBlobUrlForKey(key);
+                        setLbIndex(nextIdx);
+                        setLbSrc(url);
+                    } catch { }
+                }}
+                onNext={async () => {
+                    const total = lbKeys.length;
+                    if (total <= 1) return;
+                    const nextIdx = lbIndex >= total - 1 ? 0 : (lbIndex + 1);
+                    const key = lbKeys[nextIdx];
+                    try {
+                        const url = await ensureBlobUrlForKey(key);
+                        setLbIndex(nextIdx);
+                        setLbSrc(url);
+                    } catch { }
+                }}
+                canPrev={lbKeys.length > 1}
+                canNext={lbKeys.length > 1}
+            />
             {/* 刪除確認對話框 */}
             <ConfirmDialog
                 open={!!confirmDelete.runId}
