@@ -7,6 +7,7 @@ import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
 import { Download, Play, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Trash, Link2, Settings } from "lucide-react";
+import { getOptimizedImageUrl, getResponsiveImageUrls, preloadImages } from "@/lib/image-utils";
 
 export type FlowHistoryListRun = {
     runId: string;
@@ -100,7 +101,29 @@ export function FlowHistoryList({
     // 使用外部狀態或內部狀態
     const currentExpandedState = currentExpanded || expanded;
     const toggleExpand = onToggleExpand || ((runId: string) => {
+        const isExpanding = !expanded[runId];
         setExpanded(e => ({ ...e, [runId]: !e[runId] }));
+
+        // 當展開時，預載優化過的圖片
+        if (isExpanding) {
+            const run = runs.find(r => r.runId === runId);
+            if (run?.allItems) {
+                // 為新圖片設定 loading 狀態
+                const newLoadingState: Record<string, boolean> = {};
+                run.allItems.forEach(item => {
+                    newLoadingState[item.r2Key] = true;
+                });
+                setImageLoading(prev => ({ ...prev, ...newLoadingState }));
+
+                // 預載展開後顯示的優化圖片（200px，用於顯示）
+                const imageUrls = run.allItems.map(item =>
+                    getOptimizedImageUrl(item.r2Key, { width: 200, quality: 80 })
+                );
+                preloadImages(imageUrls).catch(() => {
+                    console.log('優化圖片預載失敗，但不影響正常顯示');
+                });
+            }
+        }
     });
     const [loading, setLoading] = useState<Record<string, boolean>>({});
     const [deleted, setDeleted] = useState<Record<string, boolean>>({});
@@ -190,7 +213,7 @@ export function FlowHistoryList({
                             if (currentExpandedState[r.runId] && r.allItems) {
                                 return r.allItems.map((it, i) => (
                                     <div
-                                        key={`${it.r2Key}-${i}`}
+                                        key={it.r2Key} // 使用 r2Key 作為穩定的 key
                                         className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
                                         style={{ aspectRatio: "1 / 1" }}
                                         onClick={async () => {
@@ -218,15 +241,15 @@ export function FlowHistoryList({
                                             <Skeleton className="absolute inset-0 rounded-md" />
                                         )}
                                         <Image
-                                            src={`/api/r2/${it.r2Key}`}
+                                            src={getOptimizedImageUrl(it.r2Key, { width: 200, quality: 80 })}
                                             alt="thumb"
                                             fill
+                                            sizes="200px"
                                             className={`object-cover transition-opacity duration-200 ${imageLoading[it.r2Key] !== false ? 'opacity-0' : 'opacity-100'
                                                 }`}
                                             onLoad={() => {
                                                 setImageLoading(prev => ({ ...prev, [it.r2Key]: false }));
-                                                // 預先載入 blob URL 以供 lightbox 使用
-                                                void ensureBlobUrlForKey(it.r2Key).catch(() => { });
+                                                // 原始圖片只在點擊 lightbox 時載入
                                             }}
                                             onError={() => {
                                                 setImageLoading(prev => ({ ...prev, [it.r2Key]: false }));
@@ -267,7 +290,7 @@ export function FlowHistoryList({
                             // 預覽模式：顯示前幾張圖片
                             return r.itemsPreview.slice(0, cols).map((it, i) => (
                                 <div
-                                    key={`${it.r2Key}-${i}`}
+                                    key={it.r2Key} // 使用 r2Key 作為穩定的 key
                                     className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
                                     style={{ aspectRatio: "1 / 1" }}
                                     onClick={async () => {
@@ -295,15 +318,15 @@ export function FlowHistoryList({
                                         <Skeleton className="absolute inset-0 rounded-md" />
                                     )}
                                     <Image
-                                        src={`/api/r2/${it.r2Key}`}
+                                        src={getOptimizedImageUrl(it.r2Key, { width: 200, quality: 80 })}
                                         alt="thumb"
                                         fill
+                                        sizes="200px"
                                         className={`object-cover transition-opacity duration-200 ${imageLoading[it.r2Key] !== false ? 'opacity-0' : 'opacity-100'
                                             }`}
                                         onLoad={() => {
                                             setImageLoading(prev => ({ ...prev, [it.r2Key]: false }));
-                                            // 預先載入 blob URL 以供 lightbox 使用
-                                            void ensureBlobUrlForKey(it.r2Key).catch(() => { });
+                                            // 原始圖片只在點擊 lightbox 時載入
                                         }}
                                         onError={() => {
                                             setImageLoading(prev => ({ ...prev, [it.r2Key]: false }));

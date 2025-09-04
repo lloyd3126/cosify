@@ -10,6 +10,7 @@ import ConfirmDialog from "@/components/ui/confirm-dialog";
 import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, Trash, ArchiveRestore, FilePlus2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getOptimizedImageUrl, preloadImages } from "@/lib/image-utils";
 
 type Props = { slug: string; flowName: string; currentRunId?: string | null };
 
@@ -166,6 +167,16 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
 
         // 若有快取直接使用，無需 API 呼叫
         if (expanded[runId]) {
+            // 預載優化過的圖片
+            const items = expanded[runId];
+            if (items?.length) {
+                const imageUrls = items.map(item =>
+                    getOptimizedImageUrl(item.r2Key, { width: 200, quality: 80 })
+                );
+                preloadImages(imageUrls).catch(() => {
+                    console.log('優化圖片預載失敗，但不影響正常顯示');
+                });
+            }
             return;
         }
 
@@ -175,7 +186,18 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
             const res = await fetch(`/api/flows/${slug}/history/${runId}/items`, { cache: "no-store" });
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "讀取失敗");
-            setExpanded((m) => ({ ...m, [runId]: (data.items || []) as Array<{ r2Key: string; createdAt: string; kind?: string }> }));
+            const items = (data.items || []) as Array<{ r2Key: string; createdAt: string; kind?: string }>;
+            setExpanded((m) => ({ ...m, [runId]: items }));
+
+            // 載入資料後立即預載優化過的圖片
+            if (items.length) {
+                const imageUrls = items.map(item =>
+                    getOptimizedImageUrl(item.r2Key, { width: 200, quality: 80 })
+                );
+                preloadImages(imageUrls).catch(() => {
+                    console.log('優化圖片預載失敗，但不影響正常顯示');
+                });
+            }
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "讀取失敗");
             // 載入失敗時收合 UI

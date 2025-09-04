@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圖片服務測試工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        input,
+        button {
+            margin: 5px;
+            padding: 8px;
+        }
+
+        img {
+            max-width: 300px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Cloudflare Images Worker 測試工具</h1>
+
+    <div class="test-section">
+        <h2>📋 步驟一：找到真實的圖片 Key</h2>
+        <p>請到你的應用中找到任一圖片，右鍵檢查元素，找到 src 中的 r2Key</p>
+        <p>例如：<code>/api/r2/flows/xxxxx/runs/xxxxx/step_xxxxx.png</code></p>
+        <p>那麼 key 就是：<code>flows/xxxxx/runs/xxxxx/step_xxxxx.png</code></p>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 步驟二：測試圖片服務</h2>
+        <label>圖片 Key:</label>
+        <input type="text" id="imageKey" placeholder="flows/xxxxx/runs/xxxxx/step_xxxxx.png" style="width: 400px;">
+        <br>
+        <label>寬度:</label>
+        <select id="width">
+            <option value="200">200px</option>
+            <option value="400" selected>400px</option>
+            <option value="600">600px</option>
+            <option value="800">800px</option>
+        </select>
+        <label>品質:</label>
+        <select id="quality">
+            <option value="60">60%</option>
+            <option value="70">70%</option>
+            <option value="80" selected>80%</option>
+            <option value="90">90%</option>
+        </select>
+        <br>
+        <button onclick="testOriginal()">測試原始圖片</button>
+        <button onclick="testOptimized()">測試優化圖片</button>
+        <button onclick="clearResults()">清除結果</button>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function addResult(message, isSuccess = true) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${isSuccess ? 'success' : 'error'}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testOriginal() {
+            const key = document.getElementById('imageKey').value.trim();
+            if (!key) {
+                addResult('請輸入圖片 Key', false);
+                return;
+            }
+
+            const originalUrl = `https://nien.cc/api/r2/${key}`;
+            addResult(`🔍 測試原始圖片: ${originalUrl}`);
+
+            try {
+                const response = await fetch(originalUrl);
+                if (response.ok) {
+                    addResult(`✅ 原始圖片存在 (${response.status})`);
+
+                    // 顯示圖片
+                    const img = document.createElement('img');
+                    img.src = originalUrl;
+                    img.alt = '原始圖片';
+                    img.onload = () => addResult('📷 原始圖片載入成功');
+                    img.onerror = () => addResult('❌ 原始圖片載入失敗', false);
+                    document.getElementById('results').appendChild(img);
+
+                } else {
+                    addResult(`❌ 原始圖片不存在 (${response.status}: ${response.statusText})`, false);
+                }
+            } catch (error) {
+                addResult(`❌ 測試原始圖片失敗: ${error.message}`, false);
+            }
+        }
+
+        async function testOptimized() {
+            const key = document.getElementById('imageKey').value.trim();
+            const width = document.getElementById('width').value;
+            const quality = document.getElementById('quality').value;
+
+            if (!key) {
+                addResult('請輸入圖片 Key', false);
+                return;
+            }
+
+            const optimizedUrl = `https://images.nien.cc?key=${encodeURIComponent(key)}&w=${width}&q=${quality}`;
+            addResult(`🔍 測試優化圖片: ${optimizedUrl}`);
+
+            try {
+                const response = await fetch(optimizedUrl);
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    addResult(`✅ 優化圖片成功 (${response.status}, ${contentType})`);
+
+                    // 顯示圖片
+                    const img = document.createElement('img');
+                    img.src = optimizedUrl;
+                    img.alt = '優化圖片';
+                    img.onload = () => addResult('📷 優化圖片載入成功');
+                    img.onerror = () => addResult('❌ 優化圖片載入失敗', false);
+                    document.getElementById('results').appendChild(img);
+
+                } else {
+                    const errorText = await response.text();
+                    addResult(`❌ 優化圖片失敗 (${response.status}): ${errorText}`, false);
+                }
+            } catch (error) {
+                addResult(`❌ 測試優化圖片失敗: ${error.message}`, false);
+            }
+        }
+    </script>
+</body>
+
+</html>
