@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
+import { inArray, isNotNull, and } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -33,35 +34,41 @@ export async function POST(req: NextRequest) {
         })
         : [];
 
-    // 合併所有 items (上傳的圖片 + 生成的圖片)
-    const allItems = [...runSteps, ...stepAssets];
-
-    // 分組並去除重複的 r2Key
+    // 使用與私有 API 相同的邏輯：按 runId 分組處理，去重並排序
     const itemsByRun: Record<string, Array<{ r2Key: string; createdAt: string; stepId: string }>> = {};
-    const seenKeys: Record<string, Set<string>> = {}; // runId -> Set<r2Key>
 
-    for (const item of allItems) {
-        // 只處理有 r2Key 的項目
-        if (!item.r2Key) continue;
+    for (const runId of validRunIds) {
+        // 取得此 run 的 steps 與 assets，組合成時間序列
+        const runStepsForRun = runSteps.filter(s => s.runId === runId);
+        const assetsForRun = stepAssets.filter(a => a.runId === runId);
 
-        // 初始化該 runId 的 seen keys
-        if (!seenKeys[item.runId]) {
-            seenKeys[item.runId] = new Set();
-            itemsByRun[item.runId] = [];
+        // 使用 Map 去重，優先保留 assets 的記錄（與私有 API 邏輯一致）
+        const map = new Map<string, { r2Key: string; createdAt: Date; stepId: string }>();
+
+        // 先加入 assets
+        for (const a of assetsForRun) {
+            map.set(a.r2Key, { r2Key: a.r2Key, createdAt: a.createdAt, stepId: a.stepId });
         }
 
-        // 如果這個 r2Key 已經存在，跳過
-        if (seenKeys[item.runId].has(item.r2Key)) {
-            continue;
+        // 再加入 steps（如果 r2Key 已存在則不覆蓋）
+        for (const s of runStepsForRun) {
+            if (s.r2Key && !map.has(s.r2Key)) {
+                map.set(s.r2Key, { r2Key: s.r2Key, createdAt: s.createdAt, stepId: s.stepId });
+            }
         }
 
-        // 記錄這個 r2Key 並加入結果
-        seenKeys[item.runId].add(item.r2Key);
-        itemsByRun[item.runId].push({
-            r2Key: item.r2Key,
-            createdAt: item.createdAt?.toISOString?.() ?? String(item.createdAt),
-            stepId: item.stepId
-        });
+        // 按時間排序（與私有 API 邏輯一致）
+        const items = Array.from(map.values())
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+            .map((x) => ({
+                r2Key: x.r2Key,
+                createdAt: x.createdAt.toISOString(),
+                stepId: x.stepId
+            }));
+
+        if (items.length > 0) {
+            itemsByRun[runId] = items;
+        }
     }
     return NextResponse.json({ itemsByRun });
 }
