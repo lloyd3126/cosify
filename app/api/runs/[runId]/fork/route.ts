@@ -53,25 +53,30 @@ export async function POST(
         // 生成新的 runId
         const newRunId = `run-${randomUUID()}`;
 
+        // 先查詢需要複製的數據
+        const originalSteps = await db.query.flowRunSteps.findMany({
+            where: (t, { eq }) => eq(t.runId, originalRunId)
+        });
+
+        const originalAssets = await db.query.flowRunStepAssets.findMany({
+            where: (t, { eq }) => eq(t.runId, originalRunId)
+        });
+
         // 開始事務處理
-        await db.transaction(async (tx) => {
+        db.transaction((tx) => {
             // 1. 創建新的 flowRuns 記錄
-            await tx.insert(schema.flowRuns).values({
+            tx.insert(schema.flowRuns).values({
                 runId: newRunId,
                 userId: session.user.id,  // 設為當前用戶
                 slug: originalRun.slug,   // 保持相同的 slug
                 status: "active",         // 重置狀態
                 public: false,            // 預設為私人
                 // createdAt 和 updatedAt 會自動設定
-            });
+            }).run();
 
             // 2. 複製所有 flowRunSteps
-            const originalSteps = await tx.query.flowRunSteps.findMany({
-                where: (t, { eq }) => eq(t.runId, originalRunId)
-            });
-
             if (originalSteps.length > 0) {
-                await tx.insert(schema.flowRunSteps).values(
+                tx.insert(schema.flowRunSteps).values(
                     originalSteps.map(step => ({
                         runId: newRunId,           // 新的 runId
                         stepId: step.stepId,       // 保持相同的 stepId
@@ -83,16 +88,12 @@ export async function POST(
                         error: step.error,
                         // createdAt 會自動設定為當前時間
                     }))
-                );
+                ).run();
             }
 
             // 3. 複製所有 flowRunStepAssets
-            const originalAssets = await tx.query.flowRunStepAssets.findMany({
-                where: (t, { eq }) => eq(t.runId, originalRunId)
-            });
-
             if (originalAssets.length > 0) {
-                await tx.insert(schema.flowRunStepAssets).values(
+                tx.insert(schema.flowRunStepAssets).values(
                     originalAssets.map(asset => ({
                         id: `asset-${randomUUID()}`,  // 生成新的 asset ID
                         runId: newRunId,           // 新的 runId
@@ -105,7 +106,7 @@ export async function POST(
                         meta: asset.meta,
                         // createdAt 會自動設定為當前時間
                     }))
-                );
+                ).run();
             }
         });
 
