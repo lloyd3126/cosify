@@ -75,7 +75,7 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
         });
     }
     return (
-        <div className="mx-auto max-w-5xl p-6 space-y-6">
+        <div className="mx-auto max-w-6xl p-6 space-y-6">
             <div className="mt-8 mb-12">
                 <h1 className="text-4xl font-semibold text-center tracking-wide">{title}</h1>
                 <p className="text-1xl text-muted-foreground mt-3 text-center tracking-widest">{description}</p>
