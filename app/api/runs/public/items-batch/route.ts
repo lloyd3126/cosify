@@ -36,13 +36,27 @@ export async function POST(req: NextRequest) {
     // 合併所有 items (上傳的圖片 + 生成的圖片)
     const allItems = [...runSteps, ...stepAssets];
 
-    // 分組
+    // 分組並去除重複的 r2Key
     const itemsByRun: Record<string, Array<{ r2Key: string; createdAt: string; stepId: string }>> = {};
+    const seenKeys: Record<string, Set<string>> = {}; // runId -> Set<r2Key>
+
     for (const item of allItems) {
         // 只處理有 r2Key 的項目
         if (!item.r2Key) continue;
 
-        if (!itemsByRun[item.runId]) itemsByRun[item.runId] = [];
+        // 初始化該 runId 的 seen keys
+        if (!seenKeys[item.runId]) {
+            seenKeys[item.runId] = new Set();
+            itemsByRun[item.runId] = [];
+        }
+
+        // 如果這個 r2Key 已經存在，跳過
+        if (seenKeys[item.runId].has(item.r2Key)) {
+            continue;
+        }
+
+        // 記錄這個 r2Key 並加入結果
+        seenKeys[item.runId].add(item.r2Key);
         itemsByRun[item.runId].push({
             r2Key: item.r2Key,
             createdAt: item.createdAt?.toISOString?.() ?? String(item.createdAt),
