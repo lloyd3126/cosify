@@ -494,15 +494,15 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
             <Toaster richColors />
 
             <div className="flex items-center justify-between mb-6">
-                <Link
-                    href={`/flows/${slug}/introduction`}
-                    className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                    aria-label="返回"
-                >
-                    <ArrowLeftFromLine className="h-5 w-5" />
-                </Link>
+
                 <div className="flex items-center gap-2">
-                    {/* 開起新的任務：導向 /flows/[slug]/new 建立 run 後再 redirect */}
+                    <Link
+                        href={`/flows/${slug}/introduction`}
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="返回"
+                    >
+                        <ArrowLeftFromLine className="h-5 w-5" />
+                    </Link>
                     <button
                         type="button"
                         className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
@@ -512,16 +512,18 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                     >
                         <FilePlus2 className="h-5 w-5" />
                     </button>
-                    {hasHistory ? (
-                        <Link
-                            href={runId ? `/flows/${encodeURIComponent(slug)}/history?runId=${encodeURIComponent(runId)}` : `/flows/${encodeURIComponent(slug)}/history`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="前往歷史紀錄"
-                        >
-                            <History className="h-5 w-5" />
-                        </Link>
-                    ) : null}
                 </div>
+                <div className="flex-1" />
+                {/* 開起新的任務：導向 /flows/[slug]/new 建立 run 後再 redirect */}
+                {hasHistory ? (
+                    <Link
+                        href={runId ? `/flows/${encodeURIComponent(slug)}/history?runId=${encodeURIComponent(runId)}` : `/flows/${encodeURIComponent(slug)}/history`}
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="前往歷史紀錄"
+                    >
+                        <History className="h-5 w-5" />
+                    </Link>
+                ) : null}
             </div>
 
             {!runId ? (
