@@ -55,8 +55,13 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
     // 取得 demo run 的 items/createdAt 等資訊
     let runs: RunImageGridRun[] = [];
     if (demoRunIds.length > 0) {
-        // 直接查詢 API 批量取得 items
-        const res = await fetch("http://localhost:3000/api/runs/public/items-batch", {
+        // 動態構建 API URL（伺服器端需要完整 URL）
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+            process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
+            'http://localhost:3000';
+        const apiUrl = `${baseUrl}/api/runs/public/items-batch`;
+
+        const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ runIds: demoRunIds })
