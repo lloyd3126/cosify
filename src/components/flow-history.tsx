@@ -284,6 +284,7 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                         itemsTotal: run.itemsTotal,
                         allItems: expanded[run.runId] || undefined
                     })) as RunImageGridRun[]}
+                    slug={slug}
                     config={{
                         showShare: true,
                         showTogglePublic: true,

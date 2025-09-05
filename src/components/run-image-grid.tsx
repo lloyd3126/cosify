@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,12 +62,15 @@ export interface RunImageGridConfig {
 export function RunImageGrid({
     runs,
     config = {},
-    currentExpanded
+    currentExpanded,
+    slug
 }: {
     runs: RunImageGridRun[];
     config?: RunImageGridConfig;
     currentExpanded?: Record<string, boolean>;
+    slug?: string; // 流程 slug，用於播放按鈕導航
 }) {
+    const router = useRouter();
     // 預設配置 - 所有功能預設為 false，需要時明確啟用
     const {
         showShare = false,
@@ -288,11 +292,62 @@ export function RunImageGrid({
                     size="icon"
                     variant="outline"
                     disabled={loading[runId]}
-                    onClick={() => {
+                    onClick={async () => {
+                        if (onPlay) {
+                            // 如果有自訂 onPlay 回調，使用它
+                            setLoading(l => ({ ...l, [runId]: true }));
+                            onPlay(runId);
+                            return;
+                        }
+
+                        // 預設行為：檢查用戶權限並導航
+                        if (!slug) {
+                            toast.error("缺少流程資訊");
+                            return;
+                        }
+
                         setLoading(l => ({ ...l, [runId]: true }));
-                        onPlay?.(runId);
+
+                        try {
+                            // 檢查用戶是否擁有該 runId
+                            const response = await fetch(`/api/runs/${runId}/ownership`, {
+                                cache: "no-store"
+                            });
+
+                            if (response.ok) {
+                                const data = await response.json();
+                                if (data.isOwner) {
+                                    // 用戶擁有該 run，直接導航
+                                    router.push(`/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(runId)}`);
+                                } else {
+                                    // 用戶不擁有該 run，創建副本
+                                    const forkResponse = await fetch(`/api/runs/${runId}/fork`, {
+                                        method: "POST",
+                                        headers: {
+                                            "Content-Type": "application/json"
+                                        }
+                                    });
+
+                                    if (forkResponse.ok) {
+                                        const forkData = await forkResponse.json();
+                                        toast.success("已創建副本");
+                                        router.push(`/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(forkData.newRunId)}`);
+                                    } else {
+                                        const errorData = await forkResponse.json();
+                                        throw new Error(errorData.error || "創建副本失敗");
+                                    }
+                                }
+                            } else {
+                                throw new Error("檢查權限失敗");
+                            }
+                        } catch (error) {
+                            console.error("播放按鈕錯誤:", error);
+                            toast.error(error instanceof Error ? error.message : "操作失敗");
+                        } finally {
+                            setLoading(l => ({ ...l, [runId]: false }));
+                        }
                     }}
-                    aria-label="載入"
+                    aria-label="播放"
                 >
                     <Play className="h-4 w-4" />
                 </Button>

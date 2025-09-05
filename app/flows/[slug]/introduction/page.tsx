@@ -105,8 +105,10 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
             </div>
             <RunImageGrid
                 runs={runs}
+                slug={slug}
                 config={{
                     showShare: true,
+                    showPlay: true,
                     showLightbox: true,
                     showDownload: true,
                     showTimestamp: true,
