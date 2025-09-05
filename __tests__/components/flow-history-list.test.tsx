@@ -175,7 +175,7 @@ describe('FlowHistoryList - 圖片載入優化測試', () => {
             // 驗證 getOptimizedImageUrl 被調用時都使用了縮圖尺寸
             expect(imageUtils.getOptimizedImageUrl).toHaveBeenCalledWith(
                 expect.any(String),
-                expect.objectContaining({ width: 200, quality: 80 })
+                expect.objectContaining({ width: 200, quality: 100 })
             )
         })
 
@@ -712,6 +712,153 @@ describe('FlowHistoryList - 圖片載入優化測試', () => {
 
             // 不應該顯示內建燈箱
             expect(screen.queryByTestId('lightbox')).not.toBeInTheDocument()
+        })
+    })
+
+    describe('測試13: 直接使用 Cloudflare Workers 圖片優化（無 Next.js Image）', () => {
+        test('圖片應該直接使用 Cloudflare Workers URL，不經過 Next.js Image 優化', async () => {
+            const mockToggleExpand = jest.fn()
+
+            render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            // 檢查預覽圖片
+            const images = screen.getAllByRole('img')
+            expect(images.length).toBeGreaterThan(0)
+
+            images.forEach((img) => {
+                const imageElement = img as HTMLImageElement
+                // 應該直接指向 Cloudflare Workers，不是 Next.js Image
+                expect(imageElement.src).toContain('https://optimized.example.com/')
+                expect(imageElement.src).toMatch(/w=200/)
+                expect(imageElement.src).toMatch(/q=80/)
+                // 不應該包含 Next.js Image 的 URL 模式
+                expect(imageElement.src).not.toContain('/_next/image')
+                expect(imageElement.src).not.toContain('localhost:3000/_next/image')
+            })
+        })
+
+        test('展開後的圖片也應該直接使用 Cloudflare Workers URL', async () => {
+            const mockToggleExpand = jest.fn()
+
+            render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': true }}
+                />
+            )
+
+            await waitFor(() => {
+                const images = screen.getAllByRole('img')
+                expect(images.length).toBeGreaterThan(3) // 展開後應該有更多圖片
+            })
+
+            const images = screen.getAllByRole('img')
+            images.forEach((img) => {
+                const imageElement = img as HTMLImageElement
+                // 所有圖片都應該直接指向 Cloudflare Workers
+                expect(imageElement.src).toContain('https://optimized.example.com/')
+                expect(imageElement.src).toMatch(/w=200/)
+                expect(imageElement.src).toMatch(/q=80/)
+                // 不應該包含 Next.js Image 的 URL 模式
+                expect(imageElement.src).not.toContain('/_next/image')
+            })
+        })
+
+        test('圖片載入事件應該正常觸發（onLoad/onError）', async () => {
+            const mockToggleExpand = jest.fn()
+
+            render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            const images = screen.getAllByRole('img')
+            expect(images.length).toBeGreaterThan(0)
+
+            // 模擬圖片載入完成
+            const firstImage = images[0] as HTMLImageElement
+
+            // 檢查圖片有 onLoad 和 onError 事件處理器
+            expect(firstImage.onload).toBeDefined()
+            expect(firstImage.onerror).toBeDefined()
+
+            // 觸發 onLoad 事件應該不會拋出錯誤
+            expect(() => {
+                fireEvent.load(firstImage)
+            }).not.toThrow()
+
+            // 觸發 onError 事件應該不會拋出錯誤
+            expect(() => {
+                fireEvent.error(firstImage)
+            }).not.toThrow()
+        })
+
+        test('圖片應該保持正確的樣式和比例', async () => {
+            const mockToggleExpand = jest.fn()
+
+            render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            const images = screen.getAllByRole('img')
+            expect(images.length).toBeGreaterThan(0)
+
+            images.forEach((img) => {
+                const imageElement = img as HTMLImageElement
+                // 檢查基本的 CSS 類別是否存在
+                expect(imageElement.className).toContain('object-cover')
+                expect(imageElement.className).toContain('transition-opacity')
+
+                // 圖片應該有 alt 屬性
+                expect(imageElement.alt).toBe('thumb')
+
+                // 父容器應該有正確的比例設定
+                const container = imageElement.closest('div')
+                expect(container).toHaveStyle({ aspectRatio: '1 / 1' })
+            })
+        })
+
+        test('hover 效果和下載按鈕應該正常顯示', async () => {
+            const mockToggleExpand = jest.fn()
+
+            render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            // 找到圖片容器
+            const imageContainers = screen.getAllByRole('img').map(img =>
+                img.closest('[style*="aspect-ratio"]')
+            ).filter(Boolean)
+
+            expect(imageContainers.length).toBeGreaterThan(0)
+
+            // 檢查下載按鈕存在
+            const downloadButtons = screen.getAllByLabelText('下載')
+            expect(downloadButtons.length).toBe(imageContainers.length)
+
+            // 每個下載按鈕應該有正確的圖示
+            downloadButtons.forEach(button => {
+                const downloadIcon = button.querySelector('svg')
+                expect(downloadIcon).toBeInTheDocument()
+            })
         })
     })
 })

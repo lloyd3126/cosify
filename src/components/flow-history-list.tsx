@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import Image from "next/image";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import Lightbox from "@/components/ui/lightbox";
@@ -155,14 +154,14 @@ export function FlowHistoryList({
             // 快取預覽圖片的優化 URL
             run.itemsPreview.forEach(item => {
                 if (!cache[item.r2Key]) {
-                    cache[item.r2Key] = getOptimizedImageUrl(item.r2Key, { width: 200, quality: 80 });
+                    cache[item.r2Key] = getOptimizedImageUrl(item.r2Key, { width: 200, quality: 100 });
                 }
             });
             // 快取所有圖片的優化 URL（如果已載入）
             if (run.allItems) {
                 run.allItems.forEach(item => {
                     if (!cache[item.r2Key]) {
-                        cache[item.r2Key] = getOptimizedImageUrl(item.r2Key, { width: 200, quality: 80 });
+                        cache[item.r2Key] = getOptimizedImageUrl(item.r2Key, { width: 200, quality: 100 });
                     }
                 });
             }
@@ -321,12 +320,10 @@ export function FlowHistoryList({
                                         {isImageLoading(it.r2Key) && (
                                             <Skeleton className="absolute inset-0 rounded-md" />
                                         )}
-                                        <Image
-                                            src={optimizedImageCache[it.r2Key] || getOptimizedImageUrl(it.r2Key, { width: 200, quality: 80 })}
+                                        <img
+                                            src={optimizedImageCache[it.r2Key] || getOptimizedImageUrl(it.r2Key, { width: 200, quality: 100 })}
                                             alt="thumb"
-                                            fill
-                                            sizes="200px"
-                                            className={`object-cover transition-opacity duration-200 ${isImageLoading(it.r2Key) ? 'opacity-0' : 'opacity-100'
+                                            className={`w-full h-full object-cover transition-opacity duration-200 ${isImageLoading(it.r2Key) ? 'opacity-0' : 'opacity-100'
                                                 }`}
                                             onLoad={() => handleImageLoad(it.r2Key)}
                                             onError={() => handleImageError(it.r2Key)}
@@ -365,7 +362,7 @@ export function FlowHistoryList({
 
                             // 預覽模式：顯示前幾張圖片
                             return r.itemsPreview.slice(0, cols).map((it, i) => {
-                                const imageUrl = optimizedImageCache[it.r2Key] || getOptimizedImageUrl(it.r2Key, { width: 200, quality: 80 });
+                                const imageUrl = optimizedImageCache[it.r2Key] || getOptimizedImageUrl(it.r2Key, { width: 200, quality: 100 });
 
                                 return (
                                     <div
@@ -396,12 +393,10 @@ export function FlowHistoryList({
                                         {isImageLoading(it.r2Key) && (
                                             <Skeleton className="absolute inset-0 rounded-md" />
                                         )}
-                                        <Image
+                                        <img
                                             src={imageUrl}
                                             alt="thumb"
-                                            fill
-                                            sizes="200px"
-                                            className={`object-cover transition-opacity duration-200 ${isImageLoading(it.r2Key) ? 'opacity-0' : 'opacity-100'
+                                            className={`w-full h-full object-cover transition-opacity duration-200 ${isImageLoading(it.r2Key) ? 'opacity-0' : 'opacity-100'
                                                 }`}
                                             onLoad={() => handleImageLoad(it.r2Key)}
                                             onError={() => handleImageError(it.r2Key)}
