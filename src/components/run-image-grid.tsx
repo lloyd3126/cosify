@@ -378,10 +378,14 @@ export function RunImageGrid({
             return run.allItems.map((item) => renderImageItem(run.runId, item));
         }
 
-        // 如果展開但還沒有完整資料，顯示 skeleton 佔位符
+        // 如果展開但還沒有完整資料，混合顯示：保留預覽圖片 + 新增 skeleton
         if (currentExpandedState[run.runId] && !run.allItems) {
-            const skeletonCount = run.itemsTotal || 12;
-            return Array.from({ length: skeletonCount }, (_, i) => (
+            const previewItems = run.itemsPreview.map((item) => renderImageItem(run.runId, item));
+            const previewCount = run.itemsPreview.length;
+            const totalCount = run.itemsTotal || 12;
+            const skeletonCount = Math.max(0, totalCount - previewCount);
+
+            const skeletonItems = Array.from({ length: skeletonCount }, (_, i) => (
                 <div
                     key={`skeleton-${run.runId}-${i}`}
                     className="relative w-full overflow-hidden rounded-md border"
@@ -390,6 +394,8 @@ export function RunImageGrid({
                     <Skeleton className="h-full w-full" />
                 </div>
             ));
+
+            return [...previewItems, ...skeletonItems];
         }
 
         // 預覽模式：顯示限定數量的圖片
