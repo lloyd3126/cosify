@@ -257,21 +257,7 @@ export function RunImageGrid({
     const renderActionButtons = (runId: string) => {
         const buttons = [];
 
-        // 主要操作按鈕（移除分享按鈕，只保留在 modal 內）
-        if (showSettings) {
-            buttons.push(
-                <Button
-                    key="settings"
-                    size="icon"
-                    variant="outline"
-                    onClick={() => setSettingsOpen(o => ({ ...o, [runId]: true }))}
-                    aria-label="設定"
-                >
-                    <Settings className="h-4 w-4" />
-                </Button>
-            );
-        }
-
+        // 收合按鈕先出現（左邊）
         if (showExpand) {
             buttons.push(
                 <Button
@@ -286,6 +272,21 @@ export function RunImageGrid({
                     ) : (
                         <ChevronsUpDown className="h-4 w-4" />
                     )}
+                </Button>
+            );
+        }
+
+        // 設定按鈕在收合按鈕右邊
+        if (showSettings) {
+            buttons.push(
+                <Button
+                    key="settings"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setSettingsOpen(o => ({ ...o, [runId]: true }))}
+                    aria-label="設定"
+                >
+                    <Settings className="h-4 w-4" />
                 </Button>
             );
         }
