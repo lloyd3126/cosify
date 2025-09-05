@@ -257,8 +257,12 @@ export function RunImageGrid({
     const renderActionButtons = (runId: string) => {
         const buttons = [];
 
-        // 收合按鈕先出現（左邊）
-        if (showExpand) {
+        // 找到對應的 run 資料來檢查圖片數量
+        const run = runs.find(r => r.runId === runId);
+        const shouldShowExpand = showExpand && run && run.itemsTotal > maxPreviewItems;
+
+        // 收合按鈕先出現（左邊）- 只有當圖片數量超過預覽限制時才顯示
+        if (shouldShowExpand) {
             buttons.push(
                 <Button
                     key="expand"
@@ -276,21 +280,7 @@ export function RunImageGrid({
             );
         }
 
-        // 設定按鈕在收合按鈕右邊
-        if (showSettings) {
-            buttons.push(
-                <Button
-                    key="settings"
-                    size="icon"
-                    variant="outline"
-                    onClick={() => setSettingsOpen(o => ({ ...o, [runId]: true }))}
-                    aria-label="設定"
-                >
-                    <Settings className="h-4 w-4" />
-                </Button>
-            );
-        }
-
+        // 播放按鈕在中間
         if (showPlay) {
             buttons.push(
                 <Button
@@ -305,6 +295,21 @@ export function RunImageGrid({
                     aria-label="載入"
                 >
                     <Play className="h-4 w-4" />
+                </Button>
+            );
+        }
+
+        // 設定按鈕在最右邊
+        if (showSettings) {
+            buttons.push(
+                <Button
+                    key="settings"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setSettingsOpen(o => ({ ...o, [runId]: true }))}
+                    aria-label="設定"
+                >
+                    <Settings className="h-4 w-4" />
                 </Button>
             );
         }
