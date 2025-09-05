@@ -1,3 +1,5 @@
+// 可選的 icon-only 版本，與其他按鈕樣式一致
+
 import useSWRMutation from "swr/mutation";
 import { useState } from "react";
 import { Globe, GlobeLock } from 'lucide-react';

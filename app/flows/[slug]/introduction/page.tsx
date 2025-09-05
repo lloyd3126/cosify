@@ -31,8 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         metadataBase: new URL("http://localhost:3000"),
     };
 }
-import { IntroductionDemoList } from "@/components/introduction-demo-list";
-import { FlowHistoryList, FlowHistoryListRun } from "@/components/flow-history-list";
+import { RunImageGrid, type RunImageGridRun, type RunImageGridConfig } from "@/components/run-image-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +53,7 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
         demoRunIds = intro.demo.filter((id: any) => typeof id === "string");
     }
     // 取得 demo run 的 items/createdAt 等資訊
-    let runs: FlowHistoryListRun[] = [];
+    let runs: RunImageGridRun[] = [];
     if (demoRunIds.length > 0) {
         // 直接查詢 API 批量取得 items
         const res = await fetch("http://localhost:3000/api/runs/public/items-batch", {
@@ -104,7 +103,22 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                 </div>
 
             </div>
-            <FlowHistoryList runs={runs} showDelete={false} />
+            <RunImageGrid
+                runs={runs}
+                config={{
+                    showShare: true,
+                    showLightbox: true,
+                    showDownload: true,
+                    showTimestamp: true,
+                    showExpand: true,
+                    maxPreviewItems: 6,
+                    gridCols: {
+                        mobile: 3,
+                        tablet: 5,
+                        desktop: 6
+                    }
+                }}
+            />
         </div>
     );
 }

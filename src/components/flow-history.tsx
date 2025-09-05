@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FlowHistoryList, FlowHistoryListRun } from "@/components/flow-history-list";
+import { RunImageGrid, type RunImageGridRun, type RunImageGridConfig } from "@/components/run-image-grid";
 import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
@@ -276,14 +276,34 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                     </Link>
                 </div>
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
-                <FlowHistoryList
+                <RunImageGrid
                     runs={runs.map(run => ({
-                        ...run,
+                        runId: run.runId,
+                        createdAt: run.createdAt,
+                        itemsPreview: run.itemsPreview,
+                        itemsTotal: run.itemsTotal,
                         allItems: expanded[run.runId] || undefined
-                    })) as FlowHistoryListRun[]}
-                    onToggleExpand={toggleExpand}
+                    })) as RunImageGridRun[]}
+                    config={{
+                        showShare: true,
+                        showTogglePublic: true,
+                        showDelete: true,
+                        showSettings: true,
+                        showDownload: true,
+                        showExpand: true,
+                        showLightbox: false, // 使用自訂 lightbox
+                        showPlay: true,
+                        showTimestamp: true,
+                        gridCols: {
+                            mobile: 3,
+                            tablet: 5,
+                            desktop: 6
+                        },
+                        onToggleExpand: toggleExpand,
+                        onImageClick: openRunLightbox,
+                        onDelete: (runId) => setConfirmDelete({ runId })
+                    }}
                     currentExpanded={Object.fromEntries(Array.from(expandedUI).map(runId => [runId, true]))}
-                    onImageClick={openRunLightbox}
                 />
                 {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
                 {hasMore ? (
