@@ -60,6 +60,10 @@ export function unlockBodyScroll() {
         body.style.overflow = origOv;
         body.style.overflowY = origOvY;
 
+        // Also clean up any other scroll lock attributes that might be set by other libraries
+        body.removeAttribute('data-scroll-locked');
+        body.style.pointerEvents = '';
+
         docEl.removeAttribute(ATTR_ORIG_PR);
         docEl.removeAttribute(ATTR_ORIG_OV);
         docEl.removeAttribute(ATTR_ORIG_OVY);
@@ -67,4 +71,27 @@ export function unlockBodyScroll() {
     } else {
         docEl.setAttribute(ATTR_COUNT, String(count - 1));
     }
+}
+
+// Emergency function to force unlock all scroll locks
+export function forceUnlockBodyScroll() {
+    if (typeof window === "undefined") return;
+    const docEl = getDocEl();
+    const body = document.body;
+
+    // Force remove all scroll lock attributes
+    body.removeAttribute('data-scroll-locked');
+    body.style.pointerEvents = '';
+    body.style.overflow = '';
+    body.style.overflowY = '';
+    body.style.paddingRight = '';
+
+    if (docEl) {
+        docEl.removeAttribute(ATTR_COUNT);
+        docEl.removeAttribute(ATTR_ORIG_PR);
+        docEl.removeAttribute(ATTR_ORIG_OV);
+        docEl.removeAttribute(ATTR_ORIG_OVY);
+    }
+
+    console.log('Force unlocked all scroll locks');
 }

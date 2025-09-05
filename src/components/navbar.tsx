@@ -23,6 +23,7 @@ type Me = {
 export function Navbar() {
     const [me, setMe] = useState<Me>(null);
     const [loading, setLoading] = useState(true);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -41,6 +42,23 @@ export function Navbar() {
             cancelled = true;
         };
     }, []);
+
+    // Clean up any stray scroll locks when dropdown closes
+    useEffect(() => {
+        if (!dropdownOpen) {
+            // Small delay to ensure dropdown animation completes
+            const timer = setTimeout(() => {
+                const body = document.body;
+                if (body.getAttribute('data-scroll-locked')) {
+                    body.removeAttribute('data-scroll-locked');
+                    body.style.pointerEvents = '';
+                    body.style.overflow = '';
+                    body.style.overflowY = '';
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [dropdownOpen]);
 
     async function signInWithGoogle() {
         try {
@@ -86,7 +104,7 @@ export function Navbar() {
                         {loading ? (
                             <div className="h-8 w-24 rounded bg-muted/50 animate-pulse" />
                         ) : me ? (
-                            <DropdownMenu>
+                            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen} modal={false}>
                                 <DropdownMenuTrigger asChild>
                                     <button
                                         type="button"
