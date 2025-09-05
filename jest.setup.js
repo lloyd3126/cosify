@@ -1,3 +1,4 @@
+// Import testing-library jest-dom custom matchers
 import '@testing-library/jest-dom'
 
 // Mock Next.js Image component
