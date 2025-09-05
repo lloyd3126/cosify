@@ -255,9 +255,9 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
 
     return (
         <>
-            <div className="mx-auto max-w-5xl p-6 space-y-6">
+            <div className="mx-auto w-full max-w-6xl p-6 pb-12">
                 <Toaster richColors />
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-6">
                     <Link
                         href={currentRunId ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}` : `/flows/${encodeURIComponent(slug)}/new`}
                         className="inline-flex items-center rounded-md border p-2 hover:bg-muted"

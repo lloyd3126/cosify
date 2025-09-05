@@ -493,38 +493,35 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
         <div className="mx-auto w-full max-w-6xl p-6 pb-12">
             <Toaster richColors />
 
-            <div className="mt-8 mb-12">
-                <h1 className="text-4xl font-semibold text-center tracking-wide">{flow.name}</h1>
-                {flow.metadata?.description ? (
-                    <p className="text-1xl text-muted-foreground mt-3 text-center tracking-widest">{flow.metadata.description}</p>
-                ) : null}
-                <div className="mt-4 flex justify-center gap-2">
-                    <Link
-                        href={`/flows/${slug}/introduction`}
-                        className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
-                        aria-label="返回"
-                    >
-                        <ArrowLeftFromLine className="h-4 w-4" />
-                    </Link>
+            <div className="flex items-center justify-between mb-6">
+                <Link
+                    href={`/flows/${slug}/introduction`}
+                    className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                    aria-label="返回"
+                >
+                    <ArrowLeftFromLine className="h-5 w-5" />
+                </Link>
+                <div className="flex items-center gap-2">
                     {/* 開起新的任務：導向 /flows/[slug]/new 建立 run 後再 redirect */}
+
+                    {hasHistory ? (
+                        <Link
+                            href={runId ? `/flows/${encodeURIComponent(slug)}/history?runId=${encodeURIComponent(runId)}` : `/flows/${encodeURIComponent(slug)}/history`}
+                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                            aria-label="前往歷史紀錄"
+                        >
+                            <History className="h-5 w-5" />
+                        </Link>
+                    ) : null}
                     <button
                         type="button"
-                        className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
                         aria-label="開起新的任務"
                         onClick={() => router.push(`/flows/${encodeURIComponent(slug)}/new`)}
                         title="開起新的任務"
                     >
-                        <FilePlus2 className="h-4 w-4" />
+                        <FilePlus2 className="h-5 w-5" />
                     </button>
-                    {hasHistory ? (
-                        <Link
-                            href={runId ? `/flows/${encodeURIComponent(slug)}/history?runId=${encodeURIComponent(runId)}` : `/flows/${encodeURIComponent(slug)}/history`}
-                            className="inline-flex items-center rounded-md border p-2 text-sm hover:bg-muted"
-                            aria-label="前往歷史紀錄"
-                        >
-                            <History className="h-4 w-4" />
-                        </Link>
-                    ) : null}
                 </div>
             </div>
 

@@ -1,7 +1,7 @@
 import { getFlowBySlug } from "@/server/flows";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { ArrowLeftFromLine, WandSparkles } from "lucide-react";
+import { List, WandSparkles } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -85,7 +85,7 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                         className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
                         aria-label="返回"
                     >
-                        <ArrowLeftFromLine className="h-4 w-4" />
+                        <List className="h-4 w-4" />
                     </Link>
                     {canStart ? (
                         <Link
