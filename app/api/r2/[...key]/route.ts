@@ -19,22 +19,8 @@ export async function GET(
     const referer = req.headers.get('referer');
     const isNextImageRequest = userAgent?.includes('Next.js') || req.headers.get('x-nextjs-cache');
 
-    console.log('� R2 API 請求:', {
-        key: key.substring(0, 50) + '...',
-        params: { width, quality, fit },
-        isNextImageRequest,
-        referer: referer?.substring(0, 80),
-        userAgent: userAgent?.substring(0, 50)
-    });
-
     const buf = await r2Get(key);
     if (!buf) return new NextResponse("Not found", { status: 404 });
-
-    console.log('📁 R2 檔案大小:', {
-        key: key.substring(0, 30) + '...',
-        size: `${(buf.byteLength / 1024 / 1024).toFixed(2)} MB`,
-        bytes: buf.byteLength
-    });
 
     return new NextResponse(buf, {
         headers: {

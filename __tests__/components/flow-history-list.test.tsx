@@ -398,6 +398,216 @@ describe('FlowHistoryList - 圖片載入優化測試', () => {
                 expect(imageUtils.preloadOptimizedImages).not.toHaveBeenCalled()
             })
         })
+
+        test('確保展開前載入好的縮圖不會在展開後再次下載', async () => {
+            const mockToggleExpand = jest.fn()
+
+            const { rerender } = render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            // 等待初始渲染完成並記錄已載入的圖片
+            await waitFor(() => {
+                const images = screen.getAllByRole('img')
+                expect(images).toHaveLength(3) // preview 圖片
+            })
+
+            // 記錄展開前已建立的 Image 元素和載入的 URLs
+            const imagesBeforeExpand = [...createdImages]
+            const urlsBeforeExpand = imagesBeforeExpand
+                .map(img => img.getAttribute('data-test-src'))
+                .filter((url): url is string => Boolean(url))
+
+            console.log('展開前載入的圖片 URLs:', urlsBeforeExpand)
+
+            // 點擊展開按鈕
+            const expandButton = screen.getByLabelText('展開')
+            fireEvent.click(expandButton)
+
+            // 模擬展開後的狀態
+            rerender(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': true }}
+                />
+            )
+
+            // 等待展開完成
+            await waitFor(() => {
+                const images = screen.getAllByRole('img')
+                expect(images).toHaveLength(6) // 所有圖片
+            })
+
+            // 記錄展開後新建立的 Image 元素
+            const imagesAfterExpand = createdImages.slice(imagesBeforeExpand.length)
+            const newUrlsAfterExpand = imagesAfterExpand
+                .map(img => img.getAttribute('data-test-src'))
+                .filter((url): url is string => Boolean(url))
+
+            console.log('展開後新載入的圖片 URLs:', newUrlsAfterExpand)
+
+            // 檢查展開前已載入的 preview 圖片 URLs 不應該在新的載入列表中重複出現
+            const previewUrls = urlsBeforeExpand.filter(url =>
+                url.includes('preview-1.jpg') ||
+                url.includes('preview-2.jpg') ||
+                url.includes('preview-3.jpg')
+            )
+
+            previewUrls.forEach(previewUrl => {
+                const isDuplicated = newUrlsAfterExpand.some(newUrl =>
+                    newUrl.includes(previewUrl.split('?')[0].split('/').pop() || '')
+                )
+                expect(isDuplicated).toBe(false) // 不應該重複載入
+            })
+
+            // 確保新載入的圖片只包含之前沒有的圖片（full-4.jpg, full-5.jpg, full-6.jpg）
+            newUrlsAfterExpand.forEach(url => {
+                expect(
+                    url.includes('full-4.jpg') ||
+                    url.includes('full-5.jpg') ||
+                    url.includes('full-6.jpg')
+                ).toBe(true)
+            })
+        })
+
+        test('未點擊展開按鈕前已經載入好的縮圖，不會因為展開按鈕被點擊變成 Skeleton', async () => {
+            const mockToggleExpand = jest.fn()
+
+            const { rerender } = render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            // 等待初始渲染完成
+            await waitFor(() => {
+                const images = screen.getAllByRole('img')
+                expect(images).toHaveLength(3) // preview 圖片
+            })
+
+            // 🔥 關鍵測試：預覽圖片永遠不應該有 Skeleton（新實現的核心邏輯）
+            expect(screen.queryAllByTestId('skeleton')).toHaveLength(0)
+
+            // 記錄展開前圖片的 src 屬性，用於比較
+            const initialImages = screen.getAllByRole('img')
+            const initialImageSrcs = initialImages.map(img => (img as HTMLImageElement).src)
+
+            // 點擊展開按鈕
+            const expandButton = screen.getByLabelText('展開')
+            fireEvent.click(expandButton)
+
+            // 模擬展開後的狀態
+            rerender(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': true }}
+                />
+            )
+
+            // 等待一個短暫時間讓任何潛在的 loading 狀態出現
+            await new Promise(resolve => setTimeout(resolve, 50))
+
+            // 檢查原本的 preview 圖片位置是否仍然顯示圖片而非 Skeleton
+            const allImages = screen.getAllByRole('img')
+            expect(allImages).toHaveLength(6) // 現在應該有 6 張圖片
+
+            // 🔥 新實現的核心驗證：預覽圖片（前3張）永遠不會有 Skeleton
+            const previewImages = allImages.slice(0, 3)
+            previewImages.forEach((img, index) => {
+                expect(img).toBeVisible()
+                // 驗證 src 沒有改變（沒有重新載入）
+                expect((img as HTMLImageElement).src).toBe(initialImageSrcs[index])
+                // 驗證仍然是 preview 圖片
+                expect(img.getAttribute('src')).toMatch(/preview-(1|2|3)\.jpg/)
+
+                // 🔥 關鍵：驗證預覽圖片位置沒有 Skeleton
+                const imgContainer = img.closest('[role="button"]')
+                expect(imgContainer?.querySelector('[data-testid="skeleton"]')).toBeNull()
+            })
+
+            // 新圖片可能有 Skeleton，但數量應該合理
+            const skeletons = screen.queryAllByTestId('skeleton')
+            expect(skeletons.length).toBeLessThanOrEqual(3) // 最多只有 3 個新增圖片的 Skeleton
+        })
+
+        test('快速連續展開收合操作不會導致 Skeleton 閃爍', async () => {
+            const mockToggleExpand = jest.fn()
+
+            const { rerender } = render(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            // 等待初始載入
+            await waitFor(() => {
+                expect(screen.getAllByRole('img')).toHaveLength(3)
+            })
+
+            const expandButton = screen.getByLabelText('展開')
+
+            // 記錄原始圖片
+            const initialImages = screen.getAllByRole('img')
+            const initialImageSrcs = initialImages.map(img => (img as HTMLImageElement).src)
+
+            // 快速展開
+            fireEvent.click(expandButton)
+            rerender(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': true }}
+                />
+            )
+
+            // 立即收合（模擬快速操作）
+            fireEvent.click(expandButton)
+            rerender(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': false }}
+                />
+            )
+
+            // 再次展開
+            fireEvent.click(expandButton)
+            rerender(
+                <FlowHistoryList
+                    runs={mockRuns}
+                    onToggleExpand={mockToggleExpand}
+                    currentExpanded={{ 'test-run-1': true }}
+                />
+            )
+
+            // 等待所有操作完成
+            await new Promise(resolve => setTimeout(resolve, 100))
+
+            // 驗證預覽圖片仍然穩定，沒有閃爍成 Skeleton
+            const finalImages = screen.getAllByRole('img')
+            expect(finalImages).toHaveLength(6) // 應該顯示所有圖片
+
+            const previewImages = finalImages.slice(0, 3)
+            previewImages.forEach((img, index) => {
+                expect(img).toBeVisible()
+                // 驗證 src 仍然穩定
+                expect((img as HTMLImageElement).src).toBe(initialImageSrcs[index])
+            })
+
+            // 確認沒有不必要的 Skeleton
+            const skeletons = screen.queryAllByTestId('skeleton')
+            expect(skeletons.length).toBeLessThanOrEqual(3) // 只有新圖片可能有 Skeleton
+        })
     })
 
     describe('測試3: 只有點擊開啟燈箱時才會載入原始大小圖片', () => {

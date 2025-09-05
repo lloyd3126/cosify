@@ -45,7 +45,6 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
     }
     // 權限判斷（僅 public flow 可直接創作，private flow 應導向登入或顯示提示）
     const canStart = (flow.metadata?.visibility ?? "public") === "public";
-    console.log("SSR flow.introduction:", flow.introduction);
     const intro = flow.introduction ?? {};
     const title = intro.title ?? flow.name;
     const description = intro.description ?? flow.metadata?.description ?? "";

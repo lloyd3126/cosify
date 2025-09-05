@@ -41,14 +41,12 @@ function loadRaw(): FlowsFile {
 export function getAllFlows(): Flow[] {
     const { flows } = loadRaw();
     const all = Object.values(flows);
-    console.log('getAllFlows sample:', all[0]);
     return all;
 }
 
 export function getFlowBySlug(slug: string): Flow | null {
     const flows = getAllFlows();
     const found = flows.find((f) => f.slug === slug) ?? null;
-    console.log('getFlowBySlug result:', found);
     return found;
 }
 

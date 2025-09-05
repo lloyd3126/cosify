@@ -9,7 +9,6 @@ import { getOptimizedImageUrl } from "@/lib/image-utils";
 const DemoRunPreview = dynamic(() => import("@/components/demo-run-preview").then(mod => ({ default: mod.DemoRunPreview })), { ssr: false });
 
 export function IntroductionDemoList({ demoRunIds }: { demoRunIds: string[] }) {
-    console.log('IntroductionDemoList demoRunIds:', demoRunIds);
     const [itemsByRun, setItemsByRun] = React.useState<Record<string, Array<{ r2Key: string; createdAt: string; stepId: string }>>>({});
     const [loading, setLoading] = React.useState(true);
     React.useEffect(() => {

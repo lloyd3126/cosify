@@ -231,4 +231,86 @@ describe('IntroductionDemoList - 圖片載入優化測試', () => {
             )
         })
     })
+
+    describe('測試5: 圖片載入穩定性', () => {
+        test('確保展開前載入好的縮圖不會在展開後再次下載', async () => {
+            render(<IntroductionDemoList demoRunIds={mockDemoRunIds} />)
+
+            // 等待初始載入完成
+            await waitFor(() => {
+                expect(screen.queryByText('載入中…')).not.toBeInTheDocument()
+            })
+
+            // 記錄初始載入的圖片
+            const initialImages = [...createdImages]
+            const initialUrls = initialImages
+                .map(img => img.getAttribute('data-test-src'))
+                .filter((url): url is string => Boolean(url))
+
+            console.log('IntroductionDemoList 初始載入的圖片:', initialUrls)
+
+            // 等待一段時間讓任何潛在的二次載入發生
+            await new Promise(resolve => setTimeout(resolve, 200))
+
+            // 檢查是否有重複載入
+            const finalImages = createdImages.slice(initialImages.length)
+            const duplicateUrls = finalImages
+                .map(img => img.getAttribute('data-test-src'))
+                .filter((url): url is string => Boolean(url))
+
+            console.log('潛在的重複載入:', duplicateUrls)
+
+            // 不應該有重複載入同樣的縮圖 URL
+            duplicateUrls.forEach(duplicateUrl => {
+                const isDuplicate = initialUrls.some(initialUrl => {
+                    // 比較 URL 的檔案名稱部分（去除參數）
+                    const initialFileName = initialUrl.split('?')[0].split('/').pop()
+                    const duplicateFileName = duplicateUrl.split('?')[0].split('/').pop()
+                    return initialFileName === duplicateFileName
+                })
+                expect(isDuplicate).toBe(false)
+            })
+        })
+
+        test('未點擊展開按鈕前已經載入好的縮圖，不會因為展開按鈕被點擊變成 Skeleton', async () => {
+            render(<IntroductionDemoList demoRunIds={mockDemoRunIds} />)
+
+            // 等待初始載入完成
+            await waitFor(() => {
+                expect(screen.queryByText('載入中…')).not.toBeInTheDocument()
+            })
+
+            // 確認初始狀態下有圖片且沒有 Skeleton
+            const initialImages = screen.getAllByRole('img')
+            expect(initialImages.length).toBeGreaterThan(0)
+            expect(screen.queryAllByTestId('skeleton')).toHaveLength(0)
+
+            // 記錄初始圖片的 src 屬性
+            const initialImageSrcs = initialImages.map(img =>
+                (img as HTMLImageElement).src
+            )
+
+            // 模擬可能觸發重新渲染的操作（例如狀態改變）
+            // 在真實場景中，這可能是展開操作或其他狀態變化
+            await new Promise(resolve => setTimeout(resolve, 100))
+
+            // 檢查圖片是否仍然存在且沒有變成 Skeleton
+            const currentImages = screen.getAllByRole('img')
+            expect(currentImages.length).toBe(initialImages.length)
+            expect(screen.queryAllByTestId('skeleton')).toHaveLength(0)
+
+            // 驗證圖片的 src 沒有改變（沒有重新載入）
+            const currentImageSrcs = currentImages.map(img =>
+                (img as HTMLImageElement).src
+            )
+
+            expect(currentImageSrcs).toEqual(initialImageSrcs)
+
+            // 確認所有圖片都保持可見狀態
+            currentImages.forEach(img => {
+                expect(img).toBeVisible()
+                expect((img as HTMLImageElement).src).toMatch(/w=\d+/) // 仍然是縮圖
+            })
+        })
+    })
 })

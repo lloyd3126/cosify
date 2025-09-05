@@ -167,10 +167,6 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
 
         // 若有快取直接使用
         if (expanded[runId]) {
-            console.log('🎯 使用快取資料:', {
-                runId: runId.substring(0, 8),
-                itemCount: expanded[runId]?.length || 0
-            });
             return;
         }
 
@@ -183,10 +179,6 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
             const items = (data.items || []) as Array<{ r2Key: string; createdAt: string; kind?: string }>;
             setExpanded((m) => ({ ...m, [runId]: items }));
 
-            console.log('📁 載入完成:', {
-                runId: runId.substring(0, 8),
-                itemCount: items.length
-            });
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "讀取失敗");
             // 載入失敗時收合 UI

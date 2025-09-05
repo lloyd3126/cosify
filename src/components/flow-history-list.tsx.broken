@@ -4,8 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
-import { toast } from "sonner";
-import { Toaster } from "@/components/ui/sonner";
+import { toast, Toast                        console.log('⏭️ 跳過已有狀態的預覽圖片:', item.r2Key.substring(0, 20) + '...', 'current:', imageLoading[item.r2Key]);
+                    }
+                });
+
+                // 也處理已載入的 allItems 中可能存在的預覽圖片
+                if (run.allItems) {
+                    run.allItems.forEach(item => {
+                        if (previewKeys.has(item.r2Key) && imageLoading[item.r2Key] === undefined) {
+                            updates[item.r2Key] = false;
+                        }
+                    });
+                }nner";
 import Lightbox from "@/components/ui/lightbox";
 import { Download, Play, ChevronsDownUp, ChevronsUpDown, Eye, EyeOff, Trash, Link2, Settings } from "lucide-react";
 import { getOptimizedImageUrl, getResponsiveImageUrls, preloadOptimizedImages } from "@/lib/image-utils";
@@ -41,7 +51,7 @@ export function FlowHistoryList({
     // 預覽圖片永遠不應該顯示 Skeleton，因為它們在初始載入時就應該可見
     const [newItemsLoading, setNewItemsLoading] = useState<Record<string, boolean>>({});
     const previewKeysRef = useRef<Set<string>>(new Set());
-
+    
     // 更新預覽圖片的 keys 引用
     useEffect(() => {
         const newPreviewKeys = new Set<string>();
@@ -63,6 +73,46 @@ export function FlowHistoryList({
         return newItemsLoading[r2Key] === true;
     }, [newItemsLoading]);
 
+    /*
+    // 🔥 優化：使用三狀態系統 - undefined: 從未載入, true: 載入中, false: 已載入
+    const initialImageLoadingState = useMemo(() => {
+        const state: Record<string, boolean | undefined> = {};
+        runs.forEach(run => {
+            // 預設所有圖片為 undefined（從未載入狀態）
+            run.itemsPreview.forEach(item => {
+                state[item.r2Key] = undefined;
+            });
+            // 如果有 allItems（如 Introduction 頁面），也設為 undefined
+            if (run.allItems) {
+                run.allItems.forEach(item => {
+                    state[item.r2Key] = undefined;
+                });
+            }
+        });
+        return state;
+    }, [runs]);
+
+    const [imageLoading, setImageLoading] = useState<Record<string, boolean | undefined>>(initialImageLoadingState);
+
+    // 當 runs 數據變化時，更新圖片載入狀態（但不覆蓋已存在的狀態）
+    useEffect(() => {
+        setImageLoading(prev => {
+            // 只為新的圖片鍵設置 undefined，保留已存在的狀態
+            const newState = { ...prev };
+            let hasChanges = false;
+            
+            Object.keys(initialImageLoadingState).forEach(key => {
+                if (!(key in prev)) {
+                    newState[key] = initialImageLoadingState[key];
+                    hasChanges = true;
+                }
+            });
+            
+            // 🔥 重要修正：避免不必要的狀態更新
+            return hasChanges ? newState : prev;
+        });
+    }, [initialImageLoadingState]);
+    */
     const blobUrlsRef = useRef<Record<string, string>>({});
     useEffect(() => { blobUrlsRef.current = blobUrls; }, [blobUrls]);
     useEffect(() => () => { Object.values(blobUrlsRef.current).forEach((u) => { try { URL.revokeObjectURL(u); } catch { } }); }, []);
@@ -169,6 +219,105 @@ export function FlowHistoryList({
         });
         return cache;
     }, [runs]);
+
+    // TODO: 移除這個會導致重複載入圖片的 useEffect
+    // 原本用於檢查預覽圖片的載入狀態，但會造成不必要的圖片重複載入
+    // 改為依賴 Next.js Image 組件的內建載入機制
+    /*
+    useEffect(() => {
+        const preloadAndMarkPreviewImages = () => {
+            runs.forEach(run => {
+                run.itemsPreview.forEach(item => {
+                    // 為預覽圖片建立 Image 對象來檢查是否已快取
+                    const img = document.createElement('img');
+                    const url = optimizedImageCache[item.r2Key] || getOptimizedImageUrl(item.r2Key, { width: 200, quality: 80 });
+
+                    img.onload = () => {
+                        // 圖片載入成功，標記為已載入
+                        setImageLoading(prev => ({
+                            ...prev,
+                            [item.r2Key]: false
+                        }));
+                    };
+
+                    img.onerror = () => {
+                        // 即使載入失敗，也標記為已載入以避免 Skeleton
+                        setImageLoading(prev => ({
+                            ...prev,
+                            [item.r2Key]: false
+                        }));
+                    };
+
+                    // 如果圖片已在快取中，onload 會立即觸發
+                    img.src = url;
+                });
+            });
+        };
+
+        // 延遲執行，避免阻塞初始渲染
+        const timer = setTimeout(preloadAndMarkPreviewImages, 100);
+        return () => clearTimeout(timer);
+    }, [runs, optimizedImageCache]);
+    */
+
+    // 🔥 完全移除可能造成競爭條件的 useEffect
+    // 改用簡單的預覽圖片 = 無 Skeleton 邏輯
+
+    /*
+    // 🔥 完全移除可能造成競爭條件的 useEffect
+    // 改用 useMemo 來確保預覽圖片的狀態穩定性
+    const stableImageLoading = useMemo(() => {
+        const result = { ...imageLoading };
+        
+        // 確保所有預覽圖片在初始時就被標記為可載入狀態
+        runs.forEach(run => {
+            run.itemsPreview.forEach(item => {
+                if (result[item.r2Key] === undefined) {
+                    result[item.r2Key] = false; // 預覽圖片預設為已載入狀態
+                }
+            });
+        });
+        
+        return result;
+    }, [imageLoading, runs]);
+    */
+
+    /*
+    // 監聽 runs 和 currentExpanded 變化，確保預覽圖片不顯示 Skeleton
+    useEffect(() => {
+        const updates: Record<string, boolean | undefined> = {};
+
+        runs.forEach(run => {
+            if (currentExpanded?.[run.runId]) {
+                // 當展開狀態時，立即檢查預覽圖片
+                const previewKeys = new Set(run.itemsPreview.map(item => item.r2Key));
+
+                // 🔥 重要修正：只對尚未設定載入狀態的預覽圖片進行標記
+                run.itemsPreview.forEach(item => {
+                    // 只有當圖片狀態為 undefined 時才設定為已載入
+                    if (imageLoading[item.r2Key] === undefined) {
+                        updates[item.r2Key] = false;
+                    } else {
+                        // 跳過已有狀態的預覽圖片
+                    }
+                });
+
+                // 如果有 allItems，也處理其中的預覽圖片（但同樣只處理未設定的）
+                if (run.allItems) {
+                    run.allItems.forEach(item => {
+                        if (previewKeys.has(item.r2Key) && imageLoading[item.r2Key] === undefined) {
+                            updates[item.r2Key] = false;
+                        }
+                    });
+                }
+            }
+        });
+
+        if (Object.keys(updates).length > 0) {
+            setImageLoading(prev => ({ ...prev, ...updates }));
+        }
+    }, [runs, currentExpanded, imageLoading]); // 保留 imageLoading 依賴以檢查狀態
+    */
 
     const toggleExpand = onToggleExpand || ((runId: string) => {
         const isExpanding = !expanded[runId];
@@ -328,7 +477,7 @@ export function FlowHistoryList({
                                             sizes="200px"
                                             className={`object-cover transition-opacity duration-200 ${isImageLoading(it.r2Key) ? 'opacity-0' : 'opacity-100'
                                                 }`}
-                                            onLoad={() => handleImageLoad(it.r2Key)}
+                                            onLoadingComplete={() => handleImageLoad(it.r2Key)}
                                             onError={() => handleImageError(it.r2Key)}
                                         />
                                         <div className="absolute inset-0 opacity-0 pointer-events-none transition-opacity bg-black/40 group-hover:opacity-100 group-hover:pointer-events-auto">
@@ -366,61 +515,66 @@ export function FlowHistoryList({
                             // 預覽模式：顯示前幾張圖片
                             return r.itemsPreview.slice(0, cols).map((it, i) => {
                                 const imageUrl = optimizedImageCache[it.r2Key] || getOptimizedImageUrl(it.r2Key, { width: 200, quality: 80 });
-
+                                console.log('🖼️ 渲染預覽圖片:', {
+                                    r2Key: it.r2Key.substring(0, 30) + '...',
+                                    imageUrl: imageUrl.substring(0, 50) + '...',
+                                    isLoading: isImageLoading(it.r2Key)
+                                });
+                                
                                 return (
-                                    <div
-                                        key={it.r2Key} // 使用 r2Key 作為穩定的 key
-                                        className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
-                                        style={{ aspectRatio: "1 / 1" }}
-                                        onClick={async () => {
-                                            if (onImageClick) {
-                                                onImageClick(r.runId, it.r2Key);
-                                                return;
-                                            }
-                                            // 使用內建的 lightbox 邏輯
-                                            try {
-                                                const url = await ensureBlobUrlForKey(it.r2Key);
-                                                setLbSrc(url);
-                                                const allItemsForLightbox = r.allItems || r.itemsPreview;
-                                                setLbKeys(allItemsForLightbox.map((item) => item.r2Key));
-                                                setLbIndex(allItemsForLightbox.findIndex(item => item.r2Key === it.r2Key));
-                                                setLbOpen(true);
-                                            } catch (e) {
-                                                toast.error(e instanceof Error ? e.message : "下載失敗");
-                                            }
-                                        }}
-                                        role="button"
-                                        aria-label="預覽"
-                                    >
-                                        {/* Skeleton 載入佔位符 - 只在明確載入中時顯示 */}
-                                        {isImageLoading(it.r2Key) && (
-                                            <Skeleton className="absolute inset-0 rounded-md" />
-                                        )}
-                                        <Image
-                                            src={imageUrl}
-                                            alt="thumb"
-                                            fill
-                                            sizes="200px"
-                                            className={`object-cover transition-opacity duration-200 ${isImageLoading(it.r2Key) ? 'opacity-0' : 'opacity-100'
-                                                }`}
-                                            onLoad={() => handleImageLoad(it.r2Key)}
-                                            onError={() => handleImageError(it.r2Key)}
-                                        />
-                                        <div className="absolute inset-0 opacity-0 pointer-events-none transition-opacity bg-black/40 group-hover:opacity-100 group-hover:pointer-events-auto">
-                                            <div className="absolute inset-x-0 bottom-0 p-2 pointer-events-auto">
-                                                <div className="flex justify-end">
-                                                    <Button
-                                                        size="sm"
-                                                        className="bg-black text-white hover:bg-black/90"
-                                                        onClick={(e) => { e.stopPropagation(); downloadByKey(it.r2Key); }}
-                                                        aria-label="下載"
-                                                    >
-                                                        <Download className="h-4 w-4 text-white" />
-                                                    </Button>
-                                                </div>
+                                <div
+                                    key={it.r2Key} // 使用 r2Key 作為穩定的 key
+                                    className="group relative w-full overflow-hidden rounded-md border cursor-zoom-in"
+                                    style={{ aspectRatio: "1 / 1" }}
+                                    onClick={async () => {
+                                        if (onImageClick) {
+                                            onImageClick(r.runId, it.r2Key);
+                                            return;
+                                        }
+                                        // 使用內建的 lightbox 邏輯
+                                        try {
+                                            const url = await ensureBlobUrlForKey(it.r2Key);
+                                            setLbSrc(url);
+                                            const allItemsForLightbox = r.allItems || r.itemsPreview;
+                                            setLbKeys(allItemsForLightbox.map((item) => item.r2Key));
+                                            setLbIndex(allItemsForLightbox.findIndex(item => item.r2Key === it.r2Key));
+                                            setLbOpen(true);
+                                        } catch (e) {
+                                            toast.error(e instanceof Error ? e.message : "下載失敗");
+                                        }
+                                    }}
+                                    role="button"
+                                    aria-label="預覽"
+                                >
+                                    {/* Skeleton 載入佔位符 - 只在明確載入中時顯示 */}
+                                    {isImageLoading(it.r2Key) && (
+                                        <Skeleton className="absolute inset-0 rounded-md" />
+                                    )}
+                                    <Image
+                                        src={imageUrl}
+                                        alt="thumb"
+                                        fill
+                                        sizes="200px"
+                                        className={`object-cover transition-opacity duration-200 ${isImageLoading(it.r2Key) ? 'opacity-0' : 'opacity-100'
+                                            }`}
+                                        onLoadingComplete={() => handleImageLoad(it.r2Key)}
+                                        onError={() => handleImageError(it.r2Key)}
+                                    />
+                                    <div className="absolute inset-0 opacity-0 pointer-events-none transition-opacity bg-black/40 group-hover:opacity-100 group-hover:pointer-events-auto">
+                                        <div className="absolute inset-x-0 bottom-0 p-2 pointer-events-auto">
+                                            <div className="flex justify-end">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-black text-white hover:bg-black/90"
+                                                    onClick={(e) => { e.stopPropagation(); downloadByKey(it.r2Key); }}
+                                                    aria-label="下載"
+                                                >
+                                                    <Download className="h-4 w-4 text-white" />
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
+                                </div>
                                 );
                             });
                         })()}
