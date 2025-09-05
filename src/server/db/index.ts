@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS flow_runs (
 	slug TEXT NOT NULL,
 	status TEXT NOT NULL DEFAULT 'active',
 	error TEXT,
+	public INTEGER NOT NULL DEFAULT 0,
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL
 );
@@ -111,6 +112,17 @@ try {
 		sqlite.exec(
 			"ALTER TABLE verification ADD COLUMN updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)"
 		);
+	}
+} catch { }
+// Backfill: add public to flow_runs if missing
+try {
+	const hasPublic = sqlite
+		.prepare(
+			"SELECT 1 FROM pragma_table_info('flow_runs') WHERE name='public'"
+		)
+		.get();
+	if (!hasPublic) {
+		sqlite.exec("ALTER TABLE flow_runs ADD COLUMN public INTEGER NOT NULL DEFAULT 0");
 	}
 } catch { }
 // Backfill: add ip_address & user_agent to sessions if missing
