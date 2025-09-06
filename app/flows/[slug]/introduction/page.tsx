@@ -138,7 +138,7 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                     )}
                     {hasHistory ? (
                         <Link
-                            href={`/flows/${encodeURIComponent(slug)}/history`}
+                            href={`/flows/${encodeURIComponent(slug)}/history?from=introduction`}
                             className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
                             aria-label="前往歷史紀錄"
                         >

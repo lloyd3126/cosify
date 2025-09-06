@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getOptimizedImageUrl } from "@/lib/image-utils";
 
-type Props = { slug: string; flowName: string; currentRunId?: string | null };
+type Props = { slug: string; flowName: string; currentRunId?: string | null; fromSource?: string | null };
 
 type RunPreview = {
     runId: string;
@@ -22,7 +22,7 @@ type RunPreview = {
     itemsTotal: number
 };
 
-export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
+export default function FlowHistory({ slug, flowName, currentRunId, fromSource }: Props) {
     const router = useRouter();
     const PAGE_SIZE = 5;
     const [runs, setRuns] = useState<RunPreview[]>([]);
@@ -236,7 +236,13 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                 <Toaster richColors />
                 <div className="flex items-center justify-between mb-6">
                     <Link
-                        href={currentRunId ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}` : `/flows/${encodeURIComponent(slug)}/new`}
+                        href={
+                            currentRunId
+                                ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}`
+                                : fromSource === 'introduction'
+                                    ? `/flows/${encodeURIComponent(slug)}/introduction`
+                                    : `/flows/${encodeURIComponent(slug)}/new`
+                        }
                         className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
                         aria-label="返回"
                     >

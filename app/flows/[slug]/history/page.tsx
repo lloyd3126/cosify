@@ -14,6 +14,8 @@ export default async function FlowHistoryPage({ params, searchParams }: { params
     const sp = (await (searchParams ?? Promise.resolve({}))) as Record<string, string | string[] | undefined>;
     const runIdRaw = sp?.runId;
     const runIdFromUrl = Array.isArray(runIdRaw) ? (runIdRaw[0] ?? null) : (runIdRaw ?? null);
+    const fromRaw = sp?.from;
+    const fromSource = Array.isArray(fromRaw) ? (fromRaw[0] ?? null) : (fromRaw ?? null);
     const session = await auth.api.getSession({ headers: h });
     if (!session) {
         return (
@@ -65,5 +67,5 @@ export default async function FlowHistoryPage({ params, searchParams }: { params
         }
     } catch { /* 靜默清理 */ }
 
-    return <FlowHistory slug={slug} flowName={flow.name} currentRunId={runIdFromUrl} />;
+    return <FlowHistory slug={slug} flowName={flow.name} currentRunId={runIdFromUrl} fromSource={fromSource} />;
 }
