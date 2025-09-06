@@ -100,7 +100,7 @@ export function PublicRunView({ runId, slug, createdAt }: PublicRunViewProps) {
 
     if (loading) {
         return (
-            <div className="mx-auto w-full max-w-4xl p-6">
+            <div className="mx-auto w-full max-w-6xl p-6">
                 <div className="text-center">載入中...</div>
             </div>
         );
@@ -116,7 +116,7 @@ export function PublicRunView({ runId, slug, createdAt }: PublicRunViewProps) {
 
     return (
         <>
-            <div className="mx-auto w-full max-w-4xl p-6">
+            <div className="mx-auto w-full max-w-6xl p-6">
                 <div className="mb-6 space-y-2">
                     <div className="flex items-center justify-between">
                         <h1 className="text-2xl font-bold">公開執行結果</h1>
