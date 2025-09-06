@@ -23,7 +23,7 @@ export default function FlowsListPage() {
                             href={`/flows/${flow.slug}/introduction`}
                             className="block h-full"
                         >
-                            <Card className="overflow-hidden hover:bg-muted/30 border p-0 h-full flex flex-col gap-0">
+                            <Card className="rounded-md overflow-hidden hover:bg-muted/30 border p-0 h-full flex flex-col gap-0">
                                 <div className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
                                     <Image
                                         src={imagesByIndex[idx] || images[flow.slug] || flow.metadata?.thumbnail || "/vercel.svg"}
