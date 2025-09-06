@@ -297,6 +297,7 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                         showLightbox: false, // 使用自訂 lightbox
                         showPlay: true,
                         showTimestamp: true,
+                        maxPreviewItems: 20, // 🔑 新增：顯示更多項目（每步驟一張圖）
                         gridCols: {
                             mobile: 3,
                             tablet: 5,
