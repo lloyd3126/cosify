@@ -147,7 +147,7 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                     ) : null}
                 </div>
             </div>
-            <div className="mt-8 mb-14">
+            <div className="mt-8 mb-16">
                 <h1 className="text-4xl font-semibold text-center tracking-wide">{title}</h1>
                 <p className="text-1xl text-muted-foreground mt-3 text-center tracking-widest">{description}</p>
             </div>
