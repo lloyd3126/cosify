@@ -50,19 +50,67 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
         itemsTotal: number;
     }>;
     for (const r of page) {
-        // 只查詢 runSteps 中有 r2Key 的記錄（被選中的圖片）
-        const steps = await db.query.flowRunSteps.findMany({
-            where: (t, { eq, isNotNull, and }) => and(
-                eq(t.runId, r.runId),
-                isNotNull(t.r2Key)
-            )
+        // 查詢已選取的圖片和生成的資產
+        const [steps, stepAssets] = await Promise.all([
+            // 查詢已明確選取或自動選取的圖片
+            db.query.flowRunSteps.findMany({
+                where: (t, { eq, isNotNull, and }) => and(
+                    eq(t.runId, r.runId),
+                    isNotNull(t.r2Key)
+                )
+            }),
+            // 查詢所有生成的資產（用於填補沒有選取的步驟）
+            db.query.flowRunStepAssets.findMany({
+                where: (t, { eq }) => eq(t.runId, r.runId),
+                orderBy: (t, { desc }) => [desc(t.createdAt)] // 最新的排前面
+            })
+        ]);
+
+        // 建立選取圖片 map
+        const selectedMap = new Map<string, { r2Key: string; createdAt: Date }>();
+        steps.forEach(step => {
+            if (step.r2Key) {
+                selectedMap.set(step.stepId, {
+                    r2Key: step.r2Key,
+                    createdAt: step.createdAt
+                });
+            }
         });
 
-        // 建立圖片清單
-        const items = steps.map(s => ({
-            r2Key: s.r2Key!,
-            createdAt: s.createdAt
-        })).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        // 建立資產 map（每個步驟的最新資產）
+        const assetMap = new Map<string, { r2Key: string; createdAt: Date }>();
+        stepAssets.forEach(asset => {
+            // 只保留每個步驟的最新資產
+            if (!assetMap.has(asset.stepId)) {
+                assetMap.set(asset.stepId, {
+                    r2Key: asset.r2Key,
+                    createdAt: asset.createdAt
+                });
+            }
+        });
+
+        // 合併結果：優先使用選取的，其次使用最新資產
+        const finalImages: Array<{ r2Key: string; createdAt: Date }> = [];
+
+        // 收集所有涉及的步驟
+        const allStepIds = new Set([
+            ...Array.from(selectedMap.keys()),
+            ...Array.from(assetMap.keys())
+        ]);
+
+        for (const stepId of allStepIds) {
+            const selected = selectedMap.get(stepId);
+            const asset = assetMap.get(stepId);
+
+            // 優先使用已選取的，否則使用最新資產
+            const image = selected || asset;
+            if (image) {
+                finalImages.push(image);
+            }
+        }
+
+        // 建立圖片清單並排序
+        const items = finalImages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
         // 若完全沒有項目，安全起見直接跳過（理論上已在前面刪除）
         if (items.length === 0) continue;

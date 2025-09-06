@@ -28,28 +28,82 @@ export async function POST(req: NextRequest) {
     });
     validRunIds.push(...runs.map(r => r.runId));
 
-    // 查詢被選中的圖片 (只查詢 runSteps)
-    const runSteps = validRunIds.length
-        ? await db.query.flowRunSteps.findMany({
+    // 查詢已選取的圖片和生成的資產
+    const [runSteps, stepAssets] = validRunIds.length ? await Promise.all([
+        // 查詢已明確選取或自動選取的圖片
+        db.query.flowRunSteps.findMany({
             where: (t, { inArray, isNotNull, and }) => and(
                 inArray(t.runId, validRunIds),
                 isNotNull(t.r2Key)
             ),
             columns: { runId: true, r2Key: true, createdAt: true, stepId: true },
+        }),
+        // 查詢所有生成的資產（用於填補沒有選取的步驟）
+        db.query.flowRunStepAssets.findMany({
+            where: (t, { inArray }) => inArray(t.runId, validRunIds),
+            columns: { runId: true, r2Key: true, createdAt: true, stepId: true },
+            orderBy: (t, { desc }) => [desc(t.createdAt)] // 最新的排前面
         })
-        : [];
+    ]) : [[], []];
 
     // 按 runId 分組處理
     const itemsByRun: Record<string, Array<{ r2Key: string; createdAt: string; stepId: string }>> = {};
 
     for (const runId of validRunIds) {
-        const runImages = runSteps.filter(step => step.runId === runId);
+        // 建立該 run 的選取圖片 map
+        const selectedMap = new Map<string, { r2Key: string; createdAt: Date; stepId: string }>();
+        runSteps
+            .filter(step => step.runId === runId)
+            .forEach(step => {
+                if (step.r2Key) { // 確保 r2Key 不為 null
+                    selectedMap.set(step.stepId, {
+                        r2Key: step.r2Key,
+                        createdAt: step.createdAt,
+                        stepId: step.stepId
+                    });
+                }
+            });
 
-        // 暫時按時間排序，未來會改為按步驟排序
-        runImages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        // 建立該 run 的資產 map（每個步驟的最新資產）
+        const assetMap = new Map<string, { r2Key: string; createdAt: Date; stepId: string }>();
+        stepAssets
+            .filter(asset => asset.runId === runId)
+            .forEach(asset => {
+                // 只保留每個步驟的最新資產（第一次遇到的，因為已按時間降序排列）
+                if (!assetMap.has(asset.stepId)) {
+                    assetMap.set(asset.stepId, {
+                        r2Key: asset.r2Key,
+                        createdAt: asset.createdAt,
+                        stepId: asset.stepId
+                    });
+                }
+            });
 
-        itemsByRun[runId] = runImages.map(img => ({
-            r2Key: img.r2Key!,  // 我們已經過濾了 null 值
+        // 合併結果：優先使用選取的，其次使用最新資產
+        const finalImages: Array<{ r2Key: string; createdAt: Date; stepId: string }> = [];
+
+        // 收集所有涉及的步驟
+        const allStepIds = new Set([
+            ...Array.from(selectedMap.keys()),
+            ...Array.from(assetMap.keys())
+        ]);
+
+        for (const stepId of allStepIds) {
+            const selected = selectedMap.get(stepId);
+            const asset = assetMap.get(stepId);
+
+            // 優先使用已選取的，否則使用最新資產
+            const image = selected || asset;
+            if (image) {
+                finalImages.push(image);
+            }
+        }
+
+        // 按時間排序，未來會改為按步驟排序
+        finalImages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+        itemsByRun[runId] = finalImages.map(img => ({
+            r2Key: img.r2Key,
             createdAt: img.createdAt.toISOString(),
             stepId: img.stepId
         }));
