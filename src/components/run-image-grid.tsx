@@ -486,7 +486,7 @@ export function RunImageGrid({
                         <div className="flex items-center justify-between m-0">
                             {showTimestamp && (
                                 <div className="text-sm text-black">
-                                    {`${formatDateTime(run.createdAt)} - ${run.itemsTotal} 張`}
+                                    {`${formatDateTime(run.createdAt)}`}
                                 </div>
                             )}
                             <div className="flex items-center gap-2">
