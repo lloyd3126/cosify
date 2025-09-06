@@ -423,9 +423,19 @@ export function RunImageGrid({
                             const url = await ensureBlobUrlForKey(item.r2Key);
                             setLbSrc(url);
                             const run = runs.find(r => r.runId === runId);
-                            const allItemsForLightbox = run?.allItems || run?.itemsPreview || [];
-                            setLbKeys(allItemsForLightbox.map((i) => i.r2Key));
-                            setLbIndex(allItemsForLightbox.findIndex(i => i.r2Key === item.r2Key));
+
+                            // 使用目前頁面顯示的圖片作為燈箱切換範圍
+                            let currentDisplayItems: RunImageGridItem[];
+                            if (currentExpandedState[runId] && run?.allItems) {
+                                // 如果已展開且有完整資料，使用所有圖片
+                                currentDisplayItems = run.allItems;
+                            } else {
+                                // 否則使用預覽圖片
+                                currentDisplayItems = run?.itemsPreview || [];
+                            }
+
+                            setLbKeys(currentDisplayItems.map((i) => i.r2Key));
+                            setLbIndex(currentDisplayItems.findIndex(i => i.r2Key === item.r2Key));
                             setLbOpen(true);
                         } catch (e) {
                             toast.error(e instanceof Error ? e.message : "下載失敗");

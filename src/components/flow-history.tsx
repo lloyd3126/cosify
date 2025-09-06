@@ -189,7 +189,7 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
     }
 
     async function openRunLightbox(runId: string, r2Key: string) {
-        // 1) 先顯示點擊的圖片（本地快取 blob URL），再處理清單載入
+        // 1) 先顯示點擊的圖片（本地快取 blob URL）
         try {
             const url = await ensureBlobUrlForKey(r2Key);
             setLbSrc(url);
@@ -198,50 +198,27 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
             return;
         }
 
-        const items = expanded[runId];
-        if (items && items.length) {
-            // 已有完整清單：直接更新 keys/index 並開啟
-            const keys = items.map((it) => it.r2Key);
-            const idx = Math.max(0, keys.indexOf(r2Key));
-            setLbKeys(keys);
-            setLbIndex(idx);
-            setLbOpen(true);
-            // 預載相鄰
-            const left = idx - 1 >= 0 ? keys[idx - 1] : null;
-            const right = idx + 1 < keys.length ? keys[idx + 1] : null;
-            if (left) void ensureBlobUrlForKey(left).catch(() => { });
-            if (right) void ensureBlobUrlForKey(right).catch(() => { });
-            return;
-        }
+        // 2) 找到對應的 run 和目前顯示的預覽圖片
+        const run = runs.find(r => r.runId === runId);
+        if (!run) return;
 
-        // 尚未有完整清單：先用單一 key 開啟，背景抓清單
-        setLbKeys([r2Key]);
-        setLbIndex(0);
+        // 使用目前頁面顯示的預覽圖片作為燈箱切換範圍
+        const currentDisplayItems = expandedUI.has(runId) && expanded[runId]
+            ? expanded[runId] // 如果已展開，使用完整清單
+            : run.itemsPreview; // 否則使用預覽清單
+
+        const keys = currentDisplayItems.map((it) => it.r2Key);
+        const idx = Math.max(0, keys.indexOf(r2Key));
+
+        setLbKeys(keys);
+        setLbIndex(idx);
         setLbOpen(true);
-        setExpanding((prev) => new Set(prev).add(runId));
-        (async () => {
-            try {
-                const res = await fetch(`/api/flows/${slug}/history/${runId}/items`, { cache: "no-store" });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data?.error || "讀取失敗");
-                const itemsLoaded = (data.items || []) as Array<{ r2Key: string; createdAt: string; kind?: string }>;
-                setExpanded((m) => ({ ...m, [runId]: itemsLoaded }));
-                const keys = itemsLoaded.map((it) => it.r2Key);
-                const idx = Math.max(0, keys.indexOf(r2Key));
-                setLbKeys(keys);
-                setLbIndex(idx);
-                // 預載相鄰
-                const left = idx - 1 >= 0 ? keys[idx - 1] : null;
-                const right = idx + 1 < keys.length ? keys[idx + 1] : null;
-                if (left) void ensureBlobUrlForKey(left).catch(() => { });
-                if (right) void ensureBlobUrlForKey(right).catch(() => { });
-            } catch (e) {
-                // 清單失敗不影響已開啟的圖片；必要時可提示
-                // toast.error(e instanceof Error ? e.message : "讀取失敗");
-            } finally {
-                setExpanding((prev) => { const n = new Set(prev); n.delete(runId); return n; });
-            }
-        })();
+
+        // 預載相鄰圖片
+        const left = idx - 1 >= 0 ? keys[idx - 1] : null;
+        const right = idx + 1 < keys.length ? keys[idx + 1] : null;
+        if (left) void ensureBlobUrlForKey(left).catch(() => { });
+        if (right) void ensureBlobUrlForKey(right).catch(() => { });
     }
 
     // 當燈箱索引變更時，預載相鄰圖片
