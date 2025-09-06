@@ -1,7 +1,7 @@
 import { getFlowBySlug } from "@/server/flows";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { List, WandSparkles } from "lucide-react";
+import { ArrowLeftFromLine, FilePlus2, LogIn } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -80,33 +80,39 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
         });
     }
     return (
-        <div className="mx-auto max-w-6xl p-6 space-y-6">
-            <div className="mt-8 mb-12">
-                <h1 className="text-4xl font-semibold text-center tracking-wide">{title}</h1>
-                <p className="text-1xl text-muted-foreground mt-3 text-center tracking-widest">{description}</p>
-                <div className="mt-4 flex justify-center gap-2">
+        <div className="mx-auto max-w-6xl p-6 pb-12">
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
                     <Link
                         href="/flows"
                         className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
                         aria-label="返回"
                     >
-                        <List className="h-4 w-4" />
+                        <ArrowLeftFromLine className="h-5 w-5" />
                     </Link>
-                    {canStart ? (
-                        <Link
-                            href={`/flows/${slug}/new`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="開始創作"
-                        >
-                            <WandSparkles className="h-4 w-4" />
-                        </Link>
-                    ) : (
-                        <Link href="/login">
-                            <button className="px-5 py-2 rounded bg-muted text-muted-foreground font-semibold" disabled>請先登入</button>
-                        </Link>
-                    )}
                 </div>
-
+                <div className="flex-1" />
+                {canStart ? (
+                    <Link
+                        href={`/flows/${slug}/new`}
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="開始創作"
+                    >
+                        <FilePlus2 className="h-5 w-5" />
+                    </Link>
+                ) : (
+                    <Link
+                        href="/login"
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="請先登入"
+                    >
+                        <LogIn className="h-5 w-5" />
+                    </Link>
+                )}
+            </div>
+            <div className="mt-8 mb-14">
+                <h1 className="text-4xl font-semibold text-center tracking-wide">{title}</h1>
+                <p className="text-1xl text-muted-foreground mt-3 text-center tracking-widest">{description}</p>
             </div>
             <RunImageGrid
                 runs={runs}
