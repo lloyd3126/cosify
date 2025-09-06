@@ -354,6 +354,28 @@ export function RunImageGrid({
             );
         }
 
+        // 公開設定按鈕（直接在播放按鈕右邊）
+        if (showTogglePublic) {
+            buttons.push(
+                <ToggleRunPublicButton key="toggle-public" runId={runId} />
+            );
+        }
+
+        // 刪除按鈕（在公開設定按鈕右邊）
+        if (showDelete) {
+            buttons.push(
+                <Button
+                    key="delete"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => onDelete?.(runId)}
+                    aria-label="刪除"
+                >
+                    <Trash className="h-4 w-4" />
+                </Button>
+            );
+        }
+
         // 設定按鈕在最右邊
         if (showSettings) {
             buttons.push(
@@ -556,14 +578,12 @@ export function RunImageGrid({
                         )}
 
                         {showDelete && (
-                            <div className="flex items-center justify-between p-3 border rounded-lg border-red-200 bg-red-50">
-                                <span className="text-sm font-medium text-red-700">刪除執行</span>
+                            <div className="flex items-center justify-between p-3 border rounded-lg">
+                                <span className="text-sm font-medium">刪除執行</span>
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="border-red-300 text-red-700 hover:bg-red-100"
                                     onClick={() => {
-                                        setDeleted(d => ({ ...d, [run.runId]: true }));
                                         setSettingsOpen(o => ({ ...o, [run.runId]: false }));
                                         onDelete?.(run.runId);
                                     }}

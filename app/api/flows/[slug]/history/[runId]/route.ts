@@ -12,27 +12,39 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ slug: st
     const session = await auth.api.getSession({ headers: req.headers });
     if (!session) return NextResponse.json({ error: "未授權" }, { status: 401 });
     const { slug, runId } = await ctx.params;
+    const url = new URL(req.url);
+    const permanent = url.searchParams.get("permanent") === "true"; // 是否永久刪除
 
     const run = await db.query.flowRuns.findFirst({ where: (t, { eq, and }) => and(eq(t.runId, runId), eq(t.userId, session.user.id), eq(t.slug, slug)) });
     if (!run) return NextResponse.json({ error: "找不到或無權限刪除此 run" }, { status: 404 });
 
-    const steps = await db.query.flowRunSteps.findMany({ where: (t, { eq }) => eq(t.runId, runId) });
+    if (permanent) {
+        // 永久刪除：實際刪除 R2 物件和 DB 記錄
+        const steps = await db.query.flowRunSteps.findMany({ where: (t, { eq }) => eq(t.runId, runId) });
 
-    // 刪除 R2 物件（逐一刪）
-    for (const s of steps) {
-        if (s.r2Key) {
-            // 直接送 DeleteObject；bucket 從 r2 client 內設定
-            try {
-                const bucket = process.env.R2_BUCKET!;
-                await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: s.r2Key }));
-            } catch { /* 忽略個別刪除失敗 */ }
+        // 刪除 R2 物件（逐一刪）
+        for (const s of steps) {
+            if (s.r2Key) {
+                // 直接送 DeleteObject；bucket 從 r2 client 內設定
+                try {
+                    const bucket = process.env.R2_BUCKET!;
+                    await r2.send(new DeleteObjectCommand({ Bucket: bucket, Key: s.r2Key }));
+                } catch { /* 忽略個別刪除失敗 */ }
+            }
         }
+
+        // 刪 DB：先 assets -> steps -> run
+        await db.delete(schema.flowRunStepAssets).where(eq(schema.flowRunStepAssets.runId, runId));
+        await db.delete(schema.flowRunSteps).where(eq(schema.flowRunSteps.runId, runId));
+        await db.delete(schema.flowRuns).where(eq(schema.flowRuns.runId, runId));
+
+        return NextResponse.json({ ok: true, permanent: true });
+    } else {
+        // 軟刪除：只更新 status 為 deleted
+        await db.update(schema.flowRuns)
+            .set({ status: "deleted", updatedAt: new Date() })
+            .where(eq(schema.flowRuns.runId, runId));
+
+        return NextResponse.json({ ok: true, deleted: true });
     }
-
-    // 刪 DB：先 assets -> steps -> run
-    await db.delete(schema.flowRunStepAssets).where(eq(schema.flowRunStepAssets.runId, runId));
-    await db.delete(schema.flowRunSteps).where(eq(schema.flowRunSteps.runId, runId));
-    await db.delete(schema.flowRuns).where(eq(schema.flowRuns.runId, runId));
-
-    return NextResponse.json({ ok: true });
 }

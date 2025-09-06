@@ -7,7 +7,7 @@ import Image from "next/image";
 import { toast, Toaster } from "sonner";
 import Lightbox from "@/components/ui/lightbox";
 import ConfirmDialog from "@/components/ui/confirm-dialog";
-import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, Trash, ArchiveRestore, FilePlus2, Recycle, ChevronDown } from "lucide-react";
+import { Download, ArrowLeftFromLine, ChevronsUpDown, ChevronsDownUp, ArchiveRestore, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getOptimizedImageUrl } from "@/lib/image-utils";
@@ -22,7 +22,7 @@ type RunPreview = {
     itemsTotal: number
 };
 
-export default function FlowHistory({ slug, flowName, currentRunId, fromSource }: Props) {
+export default function FlowRecycle({ slug, flowName, currentRunId, fromSource }: Props) {
     const router = useRouter();
     const PAGE_SIZE = 5;
     const [runs, setRuns] = useState<RunPreview[]>([]);
@@ -40,8 +40,10 @@ export default function FlowHistory({ slug, flowName, currentRunId, fromSource }
     const [lbKeys, setLbKeys] = useState<string[]>([]);
     const [lbIndex, setLbIndex] = useState(0);
     const [lbSrc, setLbSrc] = useState<string | null>(null); // 使用本地 blob URL，避免重複下載
-    // 刪除確認對話框
-    const [confirmDelete, setConfirmDelete] = useState<{ runId: string | null }>({ runId: null });
+    // 還原確認對話框
+    const [confirmRestore, setConfirmRestore] = useState<{ runId: string | null }>({ runId: null });
+    // 永久刪除確認對話框
+    const [confirmPermanentDelete, setConfirmPermanentDelete] = useState<{ runId: string | null }>({ runId: null });
 
     // 簡單的 blob URL 快取：r2Key -> objectURL；並去重並行請求
     const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
@@ -118,15 +120,16 @@ export default function FlowHistory({ slug, flowName, currentRunId, fromSource }
             const qs = new URLSearchParams();
             if (!reset && cursor) qs.set("cursor", cursor);
             qs.set("limit", String(PAGE_SIZE));
+            qs.set("deleted", "true"); // 只載入已刪除的項目
             const res = await fetch(`/api/flows/${slug}/history${qs.size ? `?${qs.toString()}` : ""}`, { cache: "no-store" });
             const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || "讀取歷史失敗");
+            if (!res.ok) throw new Error(data?.error || "讀取回收站失敗");
             const page: RunPreview[] = data.runs || [];
             setRuns((prev) => reset ? page : [...prev, ...page]);
             setCursor(data.nextCursor || null);
             setHasMore(!!data.nextCursor);
         } catch (e) {
-            toast.error(e instanceof Error ? e.message : "讀取歷史失敗");
+            toast.error(e instanceof Error ? e.message : "讀取回收站失敗");
         } finally {
             setLoading(false);
         }
@@ -138,20 +141,37 @@ export default function FlowHistory({ slug, flowName, currentRunId, fromSource }
         load(true); // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [slug]);
 
-    async function remove(runId: string) {
+    async function restore(runId: string) {
         try {
-            const res = await fetch(`/api/flows/${slug}/history/${runId}`, { method: "DELETE" });
+            const res = await fetch(`/api/flows/${slug}/history/${runId}/restore`, { method: "POST" });
             const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || "刪除失敗");
-            toast.success("已移至回收站");
+            if (!res.ok) throw new Error(data?.error || "還原失敗");
+            toast.success("已還原");
+            // 就地移除，保留已載入的其他 run 與游標/hasMore 狀態
+            setRuns((prev) => prev.filter((r) => r.runId !== runId));
+            setExpanded((m) => { const n = { ...m }; delete n[runId]; return n; });
+            setExpandedUI((prev) => { const n = new Set(prev); n.delete(runId); return n; });
+            setExpanding((prev) => { const n = new Set(prev); n.delete(runId); return n; });
+            setConfirmRestore({ runId: null });
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "還原失敗");
+        }
+    }
+
+    async function permanentDelete(runId: string) {
+        try {
+            const res = await fetch(`/api/flows/${slug}/history/${runId}?permanent=true`, { method: "DELETE" });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.error || "永久刪除失敗");
+            toast.success("已永久刪除");
             // 就地刪除，保留已載入的其他 run 與游標/hasMore 狀態
             setRuns((prev) => prev.filter((r) => r.runId !== runId));
             setExpanded((m) => { const n = { ...m }; delete n[runId]; return n; });
             setExpandedUI((prev) => { const n = new Set(prev); n.delete(runId); return n; });
             setExpanding((prev) => { const n = new Set(prev); n.delete(runId); return n; });
-            setConfirmDelete({ runId: null });
+            setConfirmPermanentDelete({ runId: null });
         } catch (e) {
-            toast.error(e instanceof Error ? e.message : "刪除失敗");
+            toast.error(e instanceof Error ? e.message : "永久刪除失敗");
         }
     }
 
@@ -236,76 +256,75 @@ export default function FlowHistory({ slug, flowName, currentRunId, fromSource }
                 <Toaster richColors />
                 <div className="flex items-center justify-between mb-6">
                     <Link
-                        href={
-                            currentRunId
-                                ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}`
-                                : fromSource === 'introduction'
-                                    ? `/flows/${encodeURIComponent(slug)}/introduction`
-                                    : `/flows/${encodeURIComponent(slug)}/new`
-                        }
+                        href={`/flows/${encodeURIComponent(slug)}/history`}
                         className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                        aria-label="返回"
+                        aria-label="返回歷史"
                     >
                         <ArrowLeftFromLine className="h-5 w-5" />
                     </Link>
-                    <div className="flex-1" />
-                    <div className="flex gap-2">
-                        <Link
-                            href={`/flows/${encodeURIComponent(slug)}/new`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="開起新的任務"
-                            title="開起新的任務"
-                        >
-                            <FilePlus2 className="h-5 w-5" />
-                        </Link>
-                        <Link
-                            href={`/flows/${encodeURIComponent(slug)}/recycle`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="回收站"
-                            title="回收站"
-                        >
-                            <Recycle className="h-5 w-5" />
-                        </Link>
-                    </div>
                 </div>
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
-                <RunImageGrid
-                    runs={runs.map(run => ({
-                        runId: run.runId,
-                        createdAt: run.createdAt,
-                        itemsPreview: run.itemsPreview,
-                        itemsTotal: run.itemsTotal,
-                        allItems: expanded[run.runId] || undefined
-                    })) as RunImageGridRun[]}
-                    slug={slug}
-                    config={{
-                        showShare: false,
-                        showTogglePublic: true,
-                        showDelete: true,
-                        showSettings: false,
-                        showDownload: true,
-                        showExpand: false, // 移除展開功能
-                        showLightbox: false, // 使用自訂 lightbox
-                        showPlay: true,
-                        showTimestamp: true,
-                        maxPreviewItems: 20, // 🔑 新增：顯示更多項目（每步驟一張圖）
-                        gridCols: {
-                            mobile: 3,
-                            tablet: 5,
-                            desktop: 6
-                        },
-                        onToggleExpand: toggleExpand,
-                        onImageClick: openRunLightbox,
-                        onDelete: (runId) => setConfirmDelete({ runId })
-                    }}
-                    currentExpanded={Object.fromEntries(Array.from(expandedUI).map(runId => [runId, true]))}
-                />
-                {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">尚無紀錄</div> : null}
+
+                {/* 回收站項目列表 */}
+                <div className="space-y-6">
+                    {runs.map((run) => (
+                        <div key={run.runId} className="border rounded-lg p-4 space-y-3">
+                            {/* 頂部操作欄 */}
+                            <div className="flex items-center justify-between">
+                                <div className="text-sm text-muted-foreground">
+                                    {formatDateTime(run.createdAt)}
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        onClick={() => setConfirmRestore({ runId: run.runId })}
+                                        aria-label="還原"
+                                    >
+                                        <ArchiveRestore className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="destructive"
+                                        onClick={() => setConfirmPermanentDelete({ runId: run.runId })}
+                                        aria-label="永久刪除"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* 圖片網格 */}
+                            <div className={gridColsClass}>
+                                {run.itemsPreview.slice(0, 20).map((item) => (
+                                    <div
+                                        key={item.r2Key}
+                                        className="relative aspect-square cursor-pointer"
+                                        onClick={() => openRunLightbox(run.runId, item.r2Key)}
+                                    >
+                                        <Image
+                                            src={getOptimizedImageUrl(item.r2Key, { width: 200, quality: 100 })}
+                                            alt=""
+                                            fill
+                                            className="object-cover rounded"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* 總數顯示 */}
+                            {run.itemsTotal > run.itemsPreview.length && (
+                                <div className="text-xs text-muted-foreground">
+                                    共 {run.itemsTotal} 張圖片
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+                {runs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">回收站是空的</div> : null}
                 {hasMore ? (
                     <div className="pt-2">
-                        <Button className="w-full bg-black text-white hover:bg-black/90" disabled={loading} onClick={() => load(false)} aria-label="載入更多">
-                            <ChevronDown className="h-4 w-4 text-white" />
-                        </Button>
+                        <Button className="w-full" disabled={loading} onClick={() => load(false)}>載入更多</Button>
                     </div>
                 ) : null}
             </div>
@@ -339,15 +358,25 @@ export default function FlowHistory({ slug, flowName, currentRunId, fromSource }
                 canPrev={lbKeys.length > 1}
                 canNext={lbKeys.length > 1}
             />
-            {/* 刪除確認對話框 */}
+            {/* 還原確認對話框 */}
             <ConfirmDialog
-                open={!!confirmDelete.runId}
-                title="刪除這次執行？"
-                description="此動作會將執行移至回收站，您可以稍後還原。"
-                confirmText="移至回收站"
+                open={!!confirmRestore.runId}
+                title="還原這次執行？"
+                description="此動作會將執行移回歷史列表中。"
+                confirmText="還原"
                 cancelText="取消"
-                onCancel={() => setConfirmDelete({ runId: null })}
-                onConfirm={() => { const id = confirmDelete.runId; if (id) void remove(id); }}
+                onCancel={() => setConfirmRestore({ runId: null })}
+                onConfirm={() => { const id = confirmRestore.runId; if (id) void restore(id); }}
+            />
+            {/* 永久刪除確認對話框 */}
+            <ConfirmDialog
+                open={!!confirmPermanentDelete.runId}
+                title="永久刪除這次執行？"
+                description="此動作無法復原，將永久刪除這次執行的所有產物。"
+                confirmText="永久刪除"
+                cancelText="取消"
+                onCancel={() => setConfirmPermanentDelete({ runId: null })}
+                onConfirm={() => { const id = confirmPermanentDelete.runId; if (id) void permanentDelete(id); }}
             />
         </>
     );

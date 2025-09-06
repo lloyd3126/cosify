@@ -40,29 +40,38 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     const url = new URL(req.url);
     const cursor = url.searchParams.get("cursor"); // ISO date string or null
     const limit = Math.min(parseInt(url.searchParams.get("limit") || "10", 10), 50);
+    const deleted = url.searchParams.get("deleted") === "true"; // 是否查詢已刪除的項目
+
+    // 根據 deleted 參數決定要查詢的 status
+    const statusFilter = deleted ? "deleted" : "active";
 
     // 先掃描並刪除空的 run（無任何 step 的 r2Key 且無任何資產）
-    try {
-        const all = await db.query.flowRuns.findMany({
-            where: (t, ops) => and(ops.eq(t.userId, session.user.id), ops.eq(t.slug, slug)),
-            columns: { runId: true },
-        });
-        for (const r of all) {
-            const hasAsset = await db.query.flowRunStepAssets.findFirst({ where: (t, { eq }) => eq(t.runId, r.runId), columns: { id: true } });
-            if (hasAsset) continue;
-            const steps = await db.query.flowRunSteps.findMany({ where: (t, { eq }) => eq(t.runId, r.runId), columns: { r2Key: true } });
-            const hasKey = steps.some((s) => !!s.r2Key);
-            if (!hasKey) {
-                await db.delete(schema.flowRunStepAssets).where(eq(schema.flowRunStepAssets.runId, r.runId));
-                await db.delete(schema.flowRunSteps).where(eq(schema.flowRunSteps.runId, r.runId));
-                await db.delete(schema.flowRuns).where(eq(schema.flowRuns.runId, r.runId));
+    // 只處理 active 狀態的 run
+    if (!deleted) {
+        try {
+            const all = await db.query.flowRuns.findMany({
+                where: (t, ops) => and(ops.eq(t.userId, session.user.id), ops.eq(t.slug, slug), ops.eq(t.status, "active")),
+                columns: { runId: true },
+            });
+            for (const r of all) {
+                const hasAsset = await db.query.flowRunStepAssets.findFirst({ where: (t, { eq }) => eq(t.runId, r.runId), columns: { id: true } });
+                if (hasAsset) continue;
+                const steps = await db.query.flowRunSteps.findMany({ where: (t, { eq }) => eq(t.runId, r.runId), columns: { r2Key: true } });
+                const hasKey = steps.some((s) => !!s.r2Key);
+                if (!hasKey) {
+                    await db.delete(schema.flowRunStepAssets).where(eq(schema.flowRunStepAssets.runId, r.runId));
+                    await db.delete(schema.flowRunSteps).where(eq(schema.flowRunSteps.runId, r.runId));
+                    await db.delete(schema.flowRuns).where(eq(schema.flowRuns.runId, r.runId));
+                }
             }
-        }
-    } catch { /* ignore cleanup errors */ }
+        } catch { /* ignore cleanup errors */ }
+    }
+
     const runs = await db.query.flowRuns.findMany({
         where: (t, ops) => and(
             ops.eq(t.userId, session.user.id),
             ops.eq(t.slug, slug),
+            ops.eq(t.status, statusFilter),
             cursor ? ops.lt(t.createdAt, new Date(cursor)) : undefined
         ),
         orderBy: (t, { desc }) => [desc(t.createdAt)],
