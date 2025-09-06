@@ -26,7 +26,12 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
     const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
     const basePinch = useRef<{ distance: number; scale: number } | null>(null);
     const [mounted, setMounted] = useState(false);
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageError, setImageError] = useState(false);
+    const [showLoading, setShowLoading] = useState(false);
+    const [prevSrc, setPrevSrc] = useState<string | null>(null);
     const swipeStart = useRef<{ x: number; y: number } | null>(null);
+    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -40,10 +45,55 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
     useEffect(() => {
         if (!open) {
             setScale(1);
+            setImageLoaded(false);
+            setImageError(false);
+            setShowLoading(false);
+            setPrevSrc(null);
             pointers.current.clear();
             basePinch.current = null;
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+                loadingTimeoutRef.current = null;
+            }
         }
     }, [open, src]);
+
+    // Reset image state when src changes
+    useEffect(() => {
+        if (src && src !== prevSrc) {
+            // 清除之前的載入計時器
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+            }
+
+            // 檢查圖片是否已在快取中
+            const img = new Image();
+            img.src = src;
+
+            const isImageCached = img.complete && img.naturalWidth > 0;
+
+            if (isImageCached) {
+                // 圖片已快取，直接切換
+                setImageLoaded(true);
+                setImageError(false);
+                setShowLoading(false);
+                setScale(1);
+            } else {
+                // 圖片未快取，設置載入狀態
+                setImageLoaded(false);
+                setImageError(false);
+                setShowLoading(false);
+                setScale(1);
+
+                // 延遲顯示載入動畫 (200ms)
+                loadingTimeoutRef.current = setTimeout(() => {
+                    setShowLoading(true);
+                }, 200);
+            }
+
+            setPrevSrc(src);
+        }
+    }, [src, prevSrc]);
 
     const clamp = (v: number) => Math.min(maxScale, Math.max(minScale, v));
 
@@ -121,6 +171,15 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onPrev, onNext, canPrev, canNext]);
 
+    // 清理計時器
+    useEffect(() => {
+        return () => {
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+            }
+        };
+    }, []);
+
     if (!open || !src || !mounted) return null;
 
     const content = (
@@ -135,7 +194,7 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
                 {/* Content box handles interactions */}
                 <div
                     ref={containerRef}
-                    className="pointer-events-auto"
+                    className="pointer-events-auto relative"
                     onWheel={onWheel}
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
@@ -144,13 +203,63 @@ export default function Lightbox({ open, src, alt, onClose, className, minScale 
                     style={{ touchAction: "none" }}
                     onClick={(e) => e.stopPropagation()}
                 >
+                    {/* Loading indicator - 只有在延遲後且圖片未載入時才顯示 */}
+                    {showLoading && !imageLoaded && !imageError && (
+                        <div className="flex items-center justify-center min-h-[200px] min-w-[200px]">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+                        </div>
+                    )}
+
+                    {/* Error state */}
+                    {imageError && (
+                        <div className="flex items-center justify-center min-h-[200px] min-w-[200px] text-white">
+                            <div className="text-center">
+                                <div className="text-4xl mb-2">⚠️</div>
+                                <div>圖片載入失敗</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Current Image */}
                     <img
+                        key={src} // 強制重新渲染以確保事件觸發
                         src={src}
                         alt={alt ?? "image"}
-                        className="max-h-[100vh] max-w-[100vw] select-none"
+                        className={clsx(
+                            "max-h-[100vh] max-w-[100vw] select-none",
+                            imageLoaded ? "opacity-100" : "opacity-0 absolute"
+                        )}
                         style={{ transform: `scale(${scale})`, transformOrigin: "center center", objectFit: "contain" as const }}
                         draggable={false}
+                        onLoad={(e) => {
+                            // 即使圖片已經快取，onLoad 仍可能觸發，確保狀態正確
+                            setImageLoaded(true);
+                            setShowLoading(false);
+                            if (loadingTimeoutRef.current) {
+                                clearTimeout(loadingTimeoutRef.current);
+                                loadingTimeoutRef.current = null;
+                            }
+                        }}
+                        onError={() => {
+                            setImageError(true);
+                            setShowLoading(false);
+                            if (loadingTimeoutRef.current) {
+                                clearTimeout(loadingTimeoutRef.current);
+                                loadingTimeoutRef.current = null;
+                            }
+                        }}
                     />
+
+                    {/* Previous Image (保持顯示直到新圖片載入完成) */}
+                    {prevSrc && prevSrc !== src && !imageLoaded && !imageError && (
+                        <img
+                            src={prevSrc}
+                            alt="previous"
+                            className="max-h-[100vh] max-w-[100vw] select-none opacity-100"
+                            style={{ transform: `scale(1)`, transformOrigin: "center center", objectFit: "contain" as const }}
+                            draggable={false}
+                        />
+                    )}
                 </div>
             </div>
         </div>
