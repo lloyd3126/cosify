@@ -59,12 +59,12 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
             process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
             'http://localhost:3000';
-        const apiUrl = `${baseUrl}/api/runs/public/items-batch`;
+        const apiUrl = `${baseUrl}/api/runs/public/selected-items`;
 
         const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ runIds: demoRunIds })
+            body: JSON.stringify({ runIds: demoRunIds, slug })
         });
         const data = await res.json();
         // itemsByRun: { runId: [{ r2Key, createdAt, stepId }] }
@@ -117,8 +117,8 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                     showLightbox: true,
                     showDownload: true,
                     showTimestamp: true,
-                    showExpand: true,
-                    maxPreviewItems: 6,
+                    showExpand: false,  // 移除展開功能
+                    maxPreviewItems: 20, // 顯示更多項目（因為現在每步驟只有一張圖）
                     gridCols: {
                         mobile: 3,
                         tablet: 5,

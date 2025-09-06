@@ -293,7 +293,7 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
                         showDelete: true,
                         showSettings: true,
                         showDownload: true,
-                        showExpand: true,
+                        showExpand: false, // 移除展開功能
                         showLightbox: false, // 使用自訂 lightbox
                         showPlay: true,
                         showTimestamp: true,

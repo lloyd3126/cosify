@@ -50,25 +50,25 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
         itemsTotal: number;
     }>;
     for (const r of page) {
-        // 取得此 run 的 steps 與 assets，組合成時間序列
-        const [steps, assets] = await Promise.all([
-            db.query.flowRunSteps.findMany({ where: (t, { eq }) => eq(t.runId, r.runId) }),
-            db.query.flowRunStepAssets.findMany({ where: (t, { eq }) => eq(t.runId, r.runId) }),
-        ]);
-        const map = new Map<string, { r2Key: string; createdAt: Date }>();
-        for (const a of assets) {
-            map.set(a.r2Key, { r2Key: a.r2Key, createdAt: a.createdAt });
-        }
-        for (const s of steps) {
-            if (s.r2Key && !map.has(s.r2Key)) {
-                map.set(s.r2Key, { r2Key: s.r2Key, createdAt: s.createdAt });
-            }
-        }
-        const items = Array.from(map.values()).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        // 只查詢 runSteps 中有 r2Key 的記錄（被選中的圖片）
+        const steps = await db.query.flowRunSteps.findMany({
+            where: (t, { eq, isNotNull, and }) => and(
+                eq(t.runId, r.runId),
+                isNotNull(t.r2Key)
+            )
+        });
+
+        // 建立圖片清單
+        const items = steps.map(s => ({
+            r2Key: s.r2Key!,
+            createdAt: s.createdAt
+        })).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
         // 若完全沒有項目，安全起見直接跳過（理論上已在前面刪除）
         if (items.length === 0) continue;
-        // 提供最多 6 張預覽，對應前端在 lg 斷點一列 6 欄
-        const preview = items.slice(0, 6).map((x) => ({ r2Key: x.r2Key, createdAt: x.createdAt.toISOString() }));
+
+        // 提供最多 20 張預覽（移除展開限制）
+        const preview = items.slice(0, 20).map((x) => ({ r2Key: x.r2Key, createdAt: x.createdAt.toISOString() }));
         results.push({ runId: r.runId, createdAt: r.createdAt.toISOString(), itemsPreview: preview, itemsTotal: items.length });
     }
     const nextCursor = runs.length > limit ? runs[limit - 1]?.createdAt?.toISOString?.() : null;
