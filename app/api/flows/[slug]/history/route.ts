@@ -2,9 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/server/auth";
 import { db, schema } from "@/server/db";
 import { and, eq, lt } from "drizzle-orm";
+import { getFlowBySlug } from "@/server/flows";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// 輔助函數：取得步驟在流程中的順序索引，找不到返回 null
+function getStepOrder(slug: string, stepId: string): number | null {
+    const flow = getFlowBySlug(slug);
+    if (!flow || !flow.steps) return null;
+
+    const index = flow.steps.findIndex(step => step.id === stepId);
+    return index === -1 ? null : index;
+}
+
+// 輔助函數：過濾並排序函數，只保留有效步驟並按步驟順序排序
+function filterAndSortItemsByStep<T extends { stepId: string; createdAt: Date }>(items: T[], slug: string): T[] {
+    // 先過濾出有效的步驟
+    const validItems = items.filter(item => {
+        const stepOrder = getStepOrder(slug, item.stepId);
+        return stepOrder !== null;
+    });
+
+    // 按步驟順序排序
+    return validItems.sort((a, b) => {
+        const stepOrderA = getStepOrder(slug, a.stepId)!;
+        const stepOrderB = getStepOrder(slug, b.stepId)!;
+
+        return stepOrderA - stepOrderB;
+    });
+}
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
     const session = await auth.api.getSession({ headers: req.headers });
@@ -90,7 +117,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
         });
 
         // 合併結果：優先使用選取的，其次使用最新資產
-        const finalImages: Array<{ r2Key: string; createdAt: Date }> = [];
+        const finalImages: Array<{ r2Key: string; createdAt: Date; stepId: string }> = [];
 
         // 收集所有涉及的步驟
         const allStepIds = new Set([
@@ -105,12 +132,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
             // 優先使用已選取的，否則使用最新資產
             const image = selected || asset;
             if (image) {
-                finalImages.push(image);
+                finalImages.push({
+                    r2Key: image.r2Key,
+                    createdAt: image.createdAt,
+                    stepId: stepId
+                });
             }
         }
 
-        // 建立圖片清單並排序
-        const items = finalImages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        // 建立圖片清單並排序：按步驟順序，過濾掉無效步驟
+        const items = filterAndSortItemsByStep(finalImages, slug);
 
         // 若完全沒有項目，安全起見直接跳過（理論上已在前面刪除）
         if (items.length === 0) continue;

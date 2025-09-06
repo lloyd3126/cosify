@@ -1,16 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/server/db";
 import { eq, and, inArray, isNotNull } from "drizzle-orm";
+import { getFlowBySlug } from "@/server/flows";
 
 export const dynamic = "force-dynamic";
+
+// 輔助函數：取得步驟在流程中的順序索引，找不到返回 null
+function getStepOrder(slug: string, stepId: string): number | null {
+    const flow = getFlowBySlug(slug);
+    if (!flow || !flow.steps) return null;
+
+    const index = flow.steps.findIndex(step => step.id === stepId);
+    return index === -1 ? null : index;
+}
+
+// 輔助函數：過濾並排序函數，只保留有效步驟並按步驟順序排序
+function filterAndSortItemsByStep<T extends { stepId: string; createdAt: Date }>(items: T[], slug: string): T[] {
+    // 先過濾出有效的步驟
+    const validItems = items.filter(item => {
+        const stepOrder = getStepOrder(slug, item.stepId);
+        return stepOrder !== null;
+    });
+
+    // 按步驟順序排序
+    return validItems.sort((a, b) => {
+        const stepOrderA = getStepOrder(slug, a.stepId)!;
+        const stepOrderB = getStepOrder(slug, b.stepId)!;
+
+        return stepOrderA - stepOrderB;
+    });
+}
 
 // 單一公開 runId items
 export async function GET(req: NextRequest, ctx: { params: Promise<{ runId: string }> }) {
     const { runId } = await ctx.params;
-    // 只允許 public 且存在的 runId
+    // 只允許 public 且存在的 runId，並取得 slug
     const run = await db.query.flowRuns.findFirst({
         where: (t, { eq }) => eq(t.runId, runId),
-        columns: { runId: true, public: true },
+        columns: { runId: true, public: true, slug: true },
     });
     if (!run || !run.public) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -42,9 +69,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ runId: stri
         }
     }
 
-    // 按時間排序（與私有 API 邏輯一致）
-    const items = Array.from(map.values())
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    // 按步驟順序排序，過濾掉無效步驟
+    const items = filterAndSortItemsByStep(Array.from(map.values()), run.slug)
         .map((x) => ({
             r2Key: x.r2Key,
             createdAt: x.createdAt.toISOString(),
@@ -60,12 +86,14 @@ export async function POST(req: NextRequest) {
     const runIds: string[] = Array.isArray(body?.runIds) ? body.runIds : [];
     if (!runIds.length) return NextResponse.json({ items: [] });
 
-    // 查詢所有 public 且存在的 runId
+    // 查詢所有 public 且存在的 runId，包含 slug
     const runs = await db.query.flowRuns.findMany({
         where: (t, { eq, inArray }) => inArray(t.runId, runIds),
-        columns: { runId: true, public: true },
+        columns: { runId: true, public: true, slug: true },
     });
-    const validRunIds = runs.filter(r => r.public).map(r => r.runId);
+    const validRuns = runs.filter(r => r.public);
+    const validRunIds = validRuns.map(r => r.runId);
+    const runSlugMap = Object.fromEntries(validRuns.map(r => [r.runId, r.slug]));
 
     // 查詢所有 items（與私有 API 邏輯一致）
     const [runSteps, stepAssets] = await Promise.all([
@@ -109,9 +137,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // 按時間排序（與私有 API 邏輯一致）
-        const items = Array.from(map.values())
-            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        // 按步驟順序排序，過濾掉無效步驟
+        const items = filterAndSortItemsByStep(Array.from(map.values()), runSlugMap[runId])
             .map((x) => ({
                 r2Key: x.r2Key,
                 createdAt: x.createdAt.toISOString(),
