@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/server/db";
+import { auth } from "@/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,5 +40,45 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ slug: stri
         return NextResponse.json({ steps: merged });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "讀取失敗" }, { status: 500 });
+    }
+}
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ slug: string; runId: string }> }) {
+    const { runId } = await ctx.params;
+
+    // 驗證用戶權限
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) return NextResponse.json({ error: "未授權" }, { status: 401 });
+
+    try {
+        const body = await req.json() as { stepId: string; r2Key: string };
+        if (!body.stepId || !body.r2Key) {
+            return NextResponse.json({ error: "缺少必要參數" }, { status: 400 });
+        }
+
+        // 驗證 runId 屬於當前用戶
+        const run = await db.query.flowRuns.findFirst({
+            where: (t, { eq, and }) => and(eq(t.runId, runId), eq(t.userId, session.user.id)),
+            columns: { runId: true },
+        });
+        if (!run) return NextResponse.json({ error: "無權限或找不到執行記錄" }, { status: 404 });
+
+        // 直接更新 flow_run_steps.r2_key
+        await db
+            .insert(schema.flowRunSteps)
+            .values({
+                runId,
+                stepId: body.stepId,
+                r2Key: body.r2Key,
+                createdAt: new Date()
+            })
+            .onConflictDoUpdate({
+                target: [schema.flowRunSteps.runId, schema.flowRunSteps.stepId],
+                set: { r2Key: body.r2Key }
+            });
+
+        return NextResponse.json({ success: true, adoptedKey: body.r2Key });
+    } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : "更新失敗" }, { status: 500 });
     }
 }

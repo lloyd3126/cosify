@@ -1170,14 +1170,32 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                                 headers: { "Content-Type": "application/json" },
                                                                                 body: JSON.stringify({ assetId: aid }),
                                                                             }).then((res) => res.ok ? null : res.json().then((d) => Promise.reject(new Error(d?.error || "採用失敗"))));
+
+                                                                            const handleAdoptError = (err: Error) => {
+                                                                                // 如果是 404 錯誤（找不到資產），嘗試直接更新 flow_run_steps
+                                                                                if (err.message.includes("找不到資產") || err.message.includes("Not found")) {
+                                                                                    // 直接呼叫更新 API，繞過 adopt 邏輯
+                                                                                    fetch(`/api/flows/${slug}/runs/${encodeURIComponent(runId!)}/state`, {
+                                                                                        method: "PATCH",
+                                                                                        headers: { "Content-Type": "application/json" },
+                                                                                        body: JSON.stringify({ stepId: sid, r2Key: key }),
+                                                                                    }).catch(() => {
+                                                                                        // 如果直接更新也失敗，靜默處理，因為 UI 已經更新了
+                                                                                        console.warn("Failed to update step state directly:", key);
+                                                                                    });
+                                                                                } else {
+                                                                                    toast.error(err.message);
+                                                                                }
+                                                                            };
+
                                                                             if (assetId && assetId.length > 0) {
-                                                                                void tryAdopt(assetId).catch((err) => toast.error(err.message));
+                                                                                void tryAdopt(assetId).catch(handleAdoptError);
                                                                             } else {
                                                                                 // 從 DB 清單嘗試以 key 對應 assetId
                                                                                 const assets = stepAssets[sid] || [];
                                                                                 const found = assets.find((a) => a.r2Key === key);
                                                                                 if (found) {
-                                                                                    void tryAdopt(found.id).catch((err) => toast.error(err.message));
+                                                                                    void tryAdopt(found.id).catch(handleAdoptError);
                                                                                 } else {
                                                                                     // 稍後重取一次資產再嘗試
                                                                                     setTimeout(() => {
@@ -1185,7 +1203,12 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
                                                                                             .then((r) => r.ok ? r.json() : null)
                                                                                             .then((data) => {
                                                                                                 const again = data?.assets?.find((a: { id: string; r2Key: string }) => a.r2Key === key);
-                                                                                                if (again) void tryAdopt(again.id).catch((err) => toast.error(err.message));
+                                                                                                if (again) {
+                                                                                                    void tryAdopt(again.id).catch(handleAdoptError);
+                                                                                                } else {
+                                                                                                    // 如果還是找不到，直接更新狀態
+                                                                                                    handleAdoptError(new Error("找不到資產"));
+                                                                                                }
                                                                                             })
                                                                                             .catch(() => { /* ignore */ });
                                                                                     }, 500);
