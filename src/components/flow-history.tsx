@@ -235,24 +235,22 @@ export default function FlowHistory({ slug, flowName, currentRunId }: Props) {
             <div className="mx-auto w-full max-w-6xl p-6 pb-12">
                 <Toaster richColors />
                 <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                        <Link
-                            href={currentRunId ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}` : `/flows/${encodeURIComponent(slug)}/new`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="返回"
-                        >
-                            <ArrowLeftFromLine className="h-5 w-5" />
-                        </Link>
-                        <Link
-                            href={`/flows/${encodeURIComponent(slug)}/new`}
-                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                            aria-label="開起新的任務"
-                            title="開起新的任務"
-                        >
-                            <FilePlus2 className="h-5 w-5" />
-                        </Link>
-                    </div>
+                    <Link
+                        href={currentRunId ? `/flows/${encodeURIComponent(slug)}?runId=${encodeURIComponent(currentRunId)}` : `/flows/${encodeURIComponent(slug)}/new`}
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="返回"
+                    >
+                        <ArrowLeftFromLine className="h-5 w-5" />
+                    </Link>
                     <div className="flex-1" />
+                    <Link
+                        href={`/flows/${encodeURIComponent(slug)}/new`}
+                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                        aria-label="開起新的任務"
+                        title="開起新的任務"
+                    >
+                        <FilePlus2 className="h-5 w-5" />
+                    </Link>
                 </div>
                 {loading ? <div className="text-sm text-muted-foreground">載入中…</div> : null}
                 <RunImageGrid

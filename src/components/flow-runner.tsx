@@ -495,26 +495,14 @@ export default function FlowRunner({ slug, flow, runIdFromUrl, hasHistory }: Pro
 
             <div className="flex items-center justify-between mb-6">
 
-                <div className="flex items-center gap-2">
-                    <Link
-                        href={`/flows/${slug}/introduction`}
-                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                        aria-label="返回"
-                    >
-                        <ArrowLeftFromLine className="h-5 w-5" />
-                    </Link>
-                    <button
-                        type="button"
-                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                        aria-label="開起新的任務"
-                        onClick={() => router.push(`/flows/${encodeURIComponent(slug)}/new`)}
-                        title="開起新的任務"
-                    >
-                        <FilePlus2 className="h-5 w-5" />
-                    </button>
-                </div>
+                <Link
+                    href={`/flows/${slug}/introduction`}
+                    className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                    aria-label="返回"
+                >
+                    <ArrowLeftFromLine className="h-5 w-5" />
+                </Link>
                 <div className="flex-1" />
-                {/* 開起新的任務：導向 /flows/[slug]/new 建立 run 後再 redirect */}
                 {hasHistory ? (
                     <Link
                         href={runId ? `/flows/${encodeURIComponent(slug)}/history?runId=${encodeURIComponent(runId)}` : `/flows/${encodeURIComponent(slug)}/history`}

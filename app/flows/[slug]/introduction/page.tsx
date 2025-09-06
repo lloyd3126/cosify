@@ -1,9 +1,12 @@
 import { getFlowBySlug } from "@/server/flows";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { ArrowLeftFromLine, FilePlus2, LogIn } from "lucide-react";
+import { ArrowLeftFromLine, FilePlus2, LogIn, History } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
+import { auth } from "@/server/auth";
+import { db } from "@/server/db";
+import { RunImageGrid, type RunImageGridRun, type RunImageGridConfig } from "@/components/run-image-grid";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params;
     const flow = getFlowBySlug(slug);
@@ -31,13 +34,36 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         metadataBase: new URL("http://localhost:3000"),
     };
 }
-import { RunImageGrid, type RunImageGridRun, type RunImageGridConfig } from "@/components/run-image-grid";
 
 export const dynamic = "force-dynamic";
 
 export default async function FlowIntroductionPage({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
+    const h = await headers();
     const flow = getFlowBySlug(slug);
+
+    // 僅允許 public flow
+    if (!flow || (flow.metadata?.visibility ?? "public") !== "public") {
+        notFound();
+    }
+
+    // 檢查用戶登入狀態和歷史紀錄
+    const session = await auth.api.getSession({ headers: h });
+    let hasHistory = false;
+
+    if (session) {
+        try {
+            // 檢查該用戶在此流程中是否有歷史紀錄
+            const historyCount = await db.query.flowRuns.findFirst({
+                where: (t, { eq, and }) => and(eq(t.userId, session.user.id), eq(t.slug, slug)),
+                columns: { runId: true },
+            });
+            hasHistory = !!historyCount;
+        } catch {
+            // 靜默處理錯誤，預設為無歷史紀錄
+        }
+    }
+
     // 僅允許 public flow
     if (!flow || (flow.metadata?.visibility ?? "public") !== "public") {
         notFound();
@@ -92,23 +118,34 @@ export default async function FlowIntroductionPage({ params }: { params: Promise
                     </Link>
                 </div>
                 <div className="flex-1" />
-                {canStart ? (
-                    <Link
-                        href={`/flows/${slug}/new`}
-                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                        aria-label="開始創作"
-                    >
-                        <FilePlus2 className="h-5 w-5" />
-                    </Link>
-                ) : (
-                    <Link
-                        href="/login"
-                        className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
-                        aria-label="請先登入"
-                    >
-                        <LogIn className="h-5 w-5" />
-                    </Link>
-                )}
+                <div className="flex items-center gap-2">
+                    {canStart ? (
+                        <Link
+                            href={`/flows/${slug}/new`}
+                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                            aria-label="開始創作"
+                        >
+                            <FilePlus2 className="h-5 w-5" />
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/login"
+                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                            aria-label="請先登入"
+                        >
+                            <LogIn className="h-5 w-5" />
+                        </Link>
+                    )}
+                    {hasHistory ? (
+                        <Link
+                            href={`/flows/${encodeURIComponent(slug)}/history`}
+                            className="inline-flex items-center rounded-md border p-2 hover:bg-muted"
+                            aria-label="前往歷史紀錄"
+                        >
+                            <History className="h-5 w-5" />
+                        </Link>
+                    ) : null}
+                </div>
             </div>
             <div className="mt-8 mb-14">
                 <h1 className="text-4xl font-semibold text-center tracking-wide">{title}</h1>
