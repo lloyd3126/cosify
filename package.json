@@ -61,5 +61,8 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.7",
     "typescript": "^5"
-  }
+  },
+  "trustedDependencies": [
+    "better-sqlite3"
+  ]
 }

@@ -29,6 +29,36 @@ describe('🔴 RED: Credit System Schema Tests', () => {
 
         // Run migrations
         await migrate(testDb, { migrationsFolder: './drizzle' })
+
+        // Create test users for foreign key constraints
+        await testDb.insert(users).values([
+            {
+                id: 'user-1',
+                email: 'user1@test.com',
+                name: 'Test User 1',
+                emailVerified: false,
+                credits: 0,
+                hasGoogleApiKey: false,
+                dailyLimit: 100,
+                signupBonusClaimed: false,
+                role: 'free_user',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+            {
+                id: 'admin-1',
+                email: 'admin@test.com',
+                name: 'Test Admin',
+                emailVerified: true,
+                credits: 1000,
+                hasGoogleApiKey: true,
+                dailyLimit: 1000,
+                signupBonusClaimed: true,
+                role: 'admin',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }
+        ])
     })
 
     afterEach(() => {
@@ -296,5 +326,5 @@ export async function calculateUserCredits(db: typeof testDb, userId: string): P
             )
         )
 
-    return validCredits[0]?.total ?? 0
+    return Number(validCredits[0]?.total ?? 0)
 }

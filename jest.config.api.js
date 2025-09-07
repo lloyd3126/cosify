@@ -8,7 +8,7 @@ const config = {
     coverageProvider: 'v8',
     testEnvironment: 'node', // API 測試需要 node 環境
     setupFilesAfterEnv: ['<rootDir>/jest.setup.api.js'], // 使用 API 專用 setup
-    moduleNameMapping: {
+    moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
     },
     testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],

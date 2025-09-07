@@ -185,7 +185,7 @@ export const creditTransactions = sqliteTable("credit_transactions", {
     id: text("id").primaryKey(),
     userId: text("user_id").notNull().references(() => users.id),
     amount: integer("amount").notNull(),
-    type: text("type").notNull().$type<'purchase' | 'signup_bonus' | 'invite_code' | 'consumption' | 'admin_adjustment'>(), 
+    type: text("type").notNull().$type<'purchase' | 'signup_bonus' | 'invite_code' | 'consumption' | 'admin_adjustment'>(),
     description: text("description"),
     metadata: text("metadata"), // JSON string for additional data
     expiresAt: integer("expires_at", { mode: "timestamp" }),

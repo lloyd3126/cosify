@@ -1,6 +1,35 @@
 // Import testing-library jest-dom custom matchers
 import '@testing-library/jest-dom'
 
+// Mock global Response for API tests
+global.Response = global.Response || class MockResponse {
+    constructor(body, init = {}) {
+        this.body = body
+        this.status = init.status || 200
+        this.statusText = init.statusText || 'OK'
+        this.headers = new Map(Object.entries(init.headers || {}))
+        this.ok = this.status >= 200 && this.status < 300
+    }
+
+    async json() {
+        return typeof this.body === 'string' ? JSON.parse(this.body) : this.body
+    }
+
+    async text() {
+        return typeof this.body === 'string' ? this.body : JSON.stringify(this.body)
+    }
+
+    static json(data, init = {}) {
+        return new MockResponse(JSON.stringify(data), {
+            ...init,
+            headers: {
+                'Content-Type': 'application/json',
+                ...init.headers
+            }
+        })
+    }
+}
+
 // Mock Next.js Image component
 jest.mock('next/image', () => {
     // eslint-disable-next-line react/display-name

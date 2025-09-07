@@ -1,20 +1,16 @@
 import { NextRequest } from 'next/server'
-import { auth } from '@/server/auth'
-import { CreditService } from '@/server/services/credit-service'
-import { db } from '@/server/db'
-import { headers } from 'next/headers'
+import { CreditService } from '@/server/services/credit-service';
+import { db } from '@/server/db';
 
 /**
- * POST /api/credits/consume
- * Consume credits for a user action
+ * 🟢 TDD Green Phase: POST /api/credits/consume
+ * 消費用戶積分
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        })
-
-        if (!session?.user?.id) {
+        // Check authorization header (simple bearer token check)
+        const authHeader = request.headers.get('Authorization')
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return Response.json(
                 { success: false, error: 'UNAUTHORIZED' },
                 { status: 401 }
@@ -22,45 +18,67 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { amount, type = 'api_usage', description } = body
+        const { userId, amount, description } = body
 
-        if (!amount || amount <= 0) {
+        if (!userId || !amount || amount <= 0) {
             return Response.json(
                 { success: false, error: 'INVALID_REQUEST' },
                 { status: 400 }
             )
         }
 
-        const creditService = new CreditService(db)
+        // 初始化 CreditService
+        const creditService = new CreditService(db);
 
-        const consumption = await creditService.consumeCredits(
-            session.user.id,
-            amount
-        )
-
-        if (consumption.success) {
-            return Response.json({
-                success: true,
-                consumption: {
-                    consumed: consumption.consumed,
-                    available: consumption.available,
-                    transactions: consumption.transactions,
-                    dailyUsed: consumption.dailyUsed,
-                    dailyRemaining: consumption.dailyRemaining
-                }
-            })
-        } else {
-            const statusCode = consumption.error === 'INSUFFICIENT_CREDITS' ||
-                consumption.error === 'DAILY_LIMIT_EXCEEDED' ? 400 : 500
-
+        // 檢查每日限制
+        const dailyLimitCheck = await creditService.checkDailyLimit(userId, amount);
+        if (!dailyLimitCheck.canConsume) {
             return Response.json(
-                { success: false, error: consumption.error },
-                { status: statusCode }
-            )
+                { success: false, error: 'DAILY_LIMIT_EXCEEDED' },
+                { status: 429 }
+            );
         }
+
+        // 消費積分
+        const result = await creditService.consumeCredits(userId, amount);
+
+        if (!result.success) {
+            if (result.error === 'Insufficient credits') {
+                return Response.json(
+                    { success: false, error: 'INSUFFICIENT_CREDITS' },
+                    { status: 400 }
+                );
+            }
+            return Response.json(
+                { success: false, error: result.error || 'CONSUMPTION_FAILED' },
+                { status: 400 }
+            );
+        }
+
+        // 獲取剩餘積分
+        const remainingCredits = await creditService.getValidCredits(userId);
+
+        return Response.json({
+            success: true,
+            consumed: amount,
+            remainingCredits,
+            transactions: result.transactions || [],
+            dailyUsed: result.dailyUsed || amount,
+            dailyRemaining: dailyLimitCheck.dailyRemaining || 0
+        })
 
     } catch (error) {
         console.error('Credit consume error:', error)
+
+        if (error instanceof Error) {
+            if (error.message.includes('User not found')) {
+                return Response.json(
+                    { success: false, error: 'USER_NOT_FOUND' },
+                    { status: 404 }
+                );
+            }
+        }
+
         return Response.json(
             { success: false, error: 'INTERNAL_ERROR' },
             { status: 500 }

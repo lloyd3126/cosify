@@ -35,7 +35,7 @@ describe('🔴 RED: CreditService Core Logic Tests', () => {
             // Create credits with different expiry dates
             const oldCredit = TestDataFactory.createCreditTransaction({
                 userId: 'user-1',
-                amount: 100,
+                amount: 50,  // Reduced from 100 to 50
                 expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
                 createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)  // 10 days ago
             })
@@ -47,22 +47,24 @@ describe('🔴 RED: CreditService Core Logic Tests', () => {
                 createdAt: new Date() // now
             })
 
-            await TestUtils.insertTestData(mockDb, [oldCredit, newCredit])
+            await TestUtils.insertTestData(mockDb, [user, oldCredit, newCredit])
 
-            // Consume 75 credits - should take all 100 from old, then 25 from new
+            // Consume 75 credits - should take all 50 from old, then 25 from new
             const result = await creditService.consumeCredits('user-1', 75)
 
             expect(result.success).toBe(true)
             expect(result.consumed).toBe(75)
             expect(result.transactions).toHaveLength(2)
             expect(result.transactions[0].transactionId).toBe(oldCredit.id)
-            expect(result.transactions[0].amountUsed).toBe(100) // Consume all old credit
+            expect(result.transactions[0].amountUsed).toBe(50) // Consume all old credit
             expect(result.transactions[1].transactionId).toBe(newCredit.id)
             expect(result.transactions[1].amountUsed).toBe(25)  // Consume part of new credit
         })
 
         test('should skip expired credits during consumption', async () => {
             // 🔴 RED: Test expired credit handling
+            const user = TestDataFactory.createUser({ id: 'user-1' })
+
             const expiredCredit = TestDataFactory.createCreditTransaction({
                 userId: 'user-1',
                 amount: 100,
@@ -75,7 +77,7 @@ describe('🔴 RED: CreditService Core Logic Tests', () => {
                 expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
             })
 
-            await TestUtils.insertTestData(mockDb, [expiredCredit, validCredit])
+            await TestUtils.insertTestData(mockDb, [user, expiredCredit, validCredit])
 
             const result = await creditService.consumeCredits('user-1', 30)
 
@@ -87,13 +89,15 @@ describe('🔴 RED: CreditService Core Logic Tests', () => {
 
         test('should fail consumption when insufficient valid credits', async () => {
             // 🔴 RED: Test insufficient credits scenario
+            const user = TestDataFactory.createUser({ id: 'user-1' })
+
             const insufficientCredit = TestDataFactory.createCreditTransaction({
                 userId: 'user-1',
                 amount: 20,
                 expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             })
 
-            await TestUtils.insertTestData(mockDb, [insufficientCredit])
+            await TestUtils.insertTestData(mockDb, [user, insufficientCredit])
 
             const result = await creditService.consumeCredits('user-1', 50)
 
@@ -323,15 +327,18 @@ describe('🔴 RED: CreditService Core Logic Tests', () => {
     describe('Error Handling and Edge Cases', () => {
         test('should handle concurrent consumption attempts', async () => {
             // 🔴 RED: Test race condition handling
+            const user = TestDataFactory.createUser({
+                id: 'user-1',
+                dailyLimit: 200  // Increase daily limit to avoid daily limit issues
+            })
+
             const credit = TestDataFactory.createCreditTransaction({
                 userId: 'user-1',
                 amount: 100,
                 expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             })
 
-            await TestUtils.insertTestData(mockDb, [credit])
-
-            // Simulate concurrent consumption
+            await TestUtils.insertTestData(mockDb, [user, credit])            // Simulate concurrent consumption
             const promises = [
                 creditService.consumeCredits('user-1', 60),
                 creditService.consumeCredits('user-1', 60)
@@ -358,8 +365,19 @@ describe('🔴 RED: CreditService Core Logic Tests', () => {
 
         test('should handle database connection errors gracefully', async () => {
             // 🔴 RED: Test error resilience
-            const brokenDb = TestUtils.createFailingDatabase()
-            const brokenService = new CreditService(brokenDb)
+            // Create a broken database that throws on select operations
+            const brokenDb = {
+                select: () => ({
+                    from: () => ({
+                        where: () => Promise.reject(new Error('Database connection failed'))
+                    })
+                }),
+                insert: jest.fn(),
+                update: jest.fn(),
+                delete: jest.fn()
+            }
+
+            const brokenService = new CreditService(brokenDb as any)
 
             const result = await brokenService.getValidCredits('user-1')
 

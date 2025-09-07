@@ -10,7 +10,7 @@ import { CreditService } from '../../src/server/services/credit-service'
 const createMockDatabase = () => {
     const mockData = {
         users: [
-            { id: 'test-user-1', email: 'test@example.com', dailyLimit: 100, signupBonusClaimed: false },
+            { id: 'test-user-1', email: 'test@example.com', dailyLimit: 500, signupBonusClaimed: false }, // Increased daily limit
             { id: 'test-user-2', email: 'test2@example.com', dailyLimit: 50, signupBonusClaimed: true },
         ],
         creditTransactions: [
@@ -156,15 +156,17 @@ describe('CreditService - GREEN Phase Tests', () => {
 
             expect(result.canConsume).toBe(true)
             expect(result.dailyUsed).toBe(0)
-            expect(result.dailyLimit).toBe(100)
-            expect(result.dailyRemaining).toBe(100)
+            expect(result.dailyLimit).toBe(500) // Updated to match new daily limit
+            expect(result.dailyRemaining).toBe(500)
         })
 
         test('should reject consumption exceeding daily limit', async () => {
-            const result = await creditService.checkDailyLimit('test-user-1', 150)
+            const result = await creditService.checkDailyLimit('test-user-1', 600) // Exceeds 500 limit
 
             expect(result.canConsume).toBe(false)
-            expect(result.dailyLimit).toBe(100)
+            expect(result.dailyUsed).toBe(0)
+            expect(result.dailyLimit).toBe(500)
+            expect(result.dailyRemaining).toBe(500)
         })
     })
 })
