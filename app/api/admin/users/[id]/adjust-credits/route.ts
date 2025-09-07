@@ -7,12 +7,22 @@ import { nanoid } from 'nanoid';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 🟢 TDD Green: 基本權限檢查（最小實作）
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.includes('Bearer')) {
+      return Response.json(
+        { success: false, error: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { amount, reason, expiresAt } = body;
-    const { id: userId } = await params; // Next.js 15 要求 await params
+    const params = await context.params; // Next.js 15 要求 await params
+    const userId = params.id;
 
     // 驗證輸入
     if (!amount || typeof amount !== 'number') {
