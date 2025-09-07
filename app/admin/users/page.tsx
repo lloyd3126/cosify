@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import useSWR from 'swr'
+import { CreditAdjustmentModal } from '@/components/admin/credit-adjustment-modal'
+import { DailyLimitModal } from '@/components/admin/daily-limit-modal'
 
 // TDD Green Phase: 最小可用實現
 const fetcher = async (url: string) => {
@@ -10,6 +12,65 @@ const fetcher = async (url: string) => {
         throw new Error(`HTTP error! status: ${response.status}`)
     }
     return response.json()
+}
+
+// Refactor: 改進錯誤類型識別
+const getErrorMessage = (error: any): string => {
+    if (!error?.message) {
+        return '網路連線發生問題'
+    }
+
+    // API 伺服器錯誤 (5xx)
+    if (error.message.includes('status: 500') || 
+        error.message.includes('status: 502') ||
+        error.message.includes('status: 503') ||
+        error.message.includes('status: 504')) {
+        return '載入用戶資料時發生錯誤'
+    }
+
+    // 客戶端錯誤 (4xx) 或網路錯誤
+    if (error.message.includes('status: 400') ||
+        error.message.includes('status: 401') ||
+        error.message.includes('status: 403') ||
+        error.message.includes('status: 404') ||
+        error.message.includes('NetworkError') ||
+        error.message.includes('Failed to fetch')) {
+        return '網路連線發生問題'
+    }
+
+    // 其他未知錯誤
+    return '網路連線發生問題'
+}
+
+// Refactor: 改進表單驗證
+const validateCreditAmount = (amount: string): { isValid: boolean; errorMessage: string } => {
+    if (!amount.trim()) {
+        return { isValid: false, errorMessage: '請輸入調整數量' }
+    }
+    
+    const numAmount = parseInt(amount)
+    if (isNaN(numAmount)) {
+        return { isValid: false, errorMessage: '請輸入有效的數字' }
+    }
+    
+    if (numAmount < -100000 || numAmount > 100000) {
+        return { isValid: false, errorMessage: '調整數量不能超過限制' }
+    }
+    
+    return { isValid: true, errorMessage: '' }
+}
+
+const validateDailyLimit = (limit: string): { isValid: boolean; errorMessage: string } => {
+    if (!limit.trim()) {
+        return { isValid: false, errorMessage: '請輸入每日限制' }
+    }
+    
+    const numLimit = parseInt(limit)
+    if (isNaN(numLimit) || numLimit < 0) {
+        return { isValid: false, errorMessage: '請輸入有效的正數' }
+    }
+    
+    return { isValid: true, errorMessage: '' }
 }
 
 interface User {
@@ -47,10 +108,24 @@ export default function UsersManagementPage() {
     const [successMessage, setSuccessMessage] = useState('')
     const [errorMessage, setErrorMessage] = useState('')
 
-    // SWR data fetching - 會被 MSW 攔截
+    // SWR data fetching with improved configuration
     const { data, error, isLoading, mutate } = useSWR(
         `/api/admin/users?page=${page}&search=${emailFilter}&role=${roleFilter}&trigger=${searchTrigger}`,
-        fetcher
+        fetcher,
+        {
+            // Refactor: 改進 SWR 配置
+            revalidateOnFocus: false, // 避免不必要的重新獲取
+            revalidateOnReconnect: true, // 網路重連時重新獲取
+            retry: (error: any, key: string, config: any, revalidate: any, { retryCount }: { retryCount: number }) => {
+                // 只在網路錯誤時重試，最多 3 次
+                if (retryCount >= 3) return false
+                if (error?.message?.includes('status: 5')) return false // 不重試服務器錯誤
+                return true
+            },
+            retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000), // 指數退避
+            dedupingInterval: 2000, // 2秒內相同請求去重
+            errorRetryInterval: 5000, // 錯誤後 5 秒重試
+        }
     )
 
     // Handle search button click
@@ -66,14 +141,15 @@ export default function UsersManagementPage() {
         setSuccessMessage('')
         setErrorMessage('')
 
-        // Validation
-        const amount = parseInt(modalCreditAmount)
-        if (isNaN(amount) || amount < -100000 || amount > 100000) {
-            setErrorMessage('調整數量不能超過限制')
+        // Refactor: 使用改進的驗證
+        const validation = validateCreditAmount(modalCreditAmount)
+        if (!validation.isValid) {
+            setErrorMessage(validation.errorMessage)
             return
         }
 
         try {
+            const amount = parseInt(modalCreditAmount) // 從驗證後獲取數值
             const response = await fetch(`/api/admin/users/${selectedUserId}/adjust-credits`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -153,17 +229,7 @@ export default function UsersManagementPage() {
 
     // Error handling
     if (error) {
-        // 檢查錯誤類型 - Green 階段簡化版本
-        let errorMessage = '網路連線發生問題' // 默認為網路錯誤
-
-        // 500 錯誤為服務器錯誤
-        if (error.message && error.message.includes('status: 500')) {
-            errorMessage = '載入用戶資料時發生錯誤'
-        }
-        // 400 錯誤為網路連線錯誤
-        if (error.message && error.message.includes('status: 400')) {
-            errorMessage = '網路連線發生問題'
-        }
+        const errorMessage = getErrorMessage(error)
 
         return (
             <div data-testid="users-management-page">
@@ -303,54 +369,25 @@ export default function UsersManagementPage() {
             )}
 
             {/* Credit Adjustment Modal */}
-            {showCreditModal && (
-                <div data-testid="credit-modal">
-                    <h2>調整用戶積分</h2>
-                    {errorMessage && (
-                        <div data-testid="error-message">
-                            {errorMessage}
-                        </div>
-                    )}
-                    <label htmlFor="modal-credit-input">調整數量</label>
-                    <input
-                        id="modal-credit-input"
-                        data-testid="modal-credit-input"
-                        type="number"
-                        placeholder="Enter credit amount"
-                        value={modalCreditAmount}
-                        onChange={(e) => setModalCreditAmount(e.target.value)}
-                    />
-                    <label htmlFor="modal-credit-reason">調整原因</label>
-                    <input
-                        id="modal-credit-reason"
-                        data-testid="modal-credit-reason"
-                        type="text"
-                        placeholder="Enter reason"
-                        value={modalCreditReason}
-                        onChange={(e) => setModalCreditReason(e.target.value)}
-                    />
-                    <button onClick={() => setShowCreditModal(false)}>取消</button>
-                    <button onClick={handleCreditModalSubmit}>確認調整</button>
-                </div>
-            )}
+            <CreditAdjustmentModal
+                isOpen={showCreditModal}
+                onClose={() => setShowCreditModal(false)}
+                onSubmit={handleCreditModalSubmit}
+                creditAmount={modalCreditAmount}
+                setCreditAmount={setModalCreditAmount}
+                reason={modalCreditReason}
+                setReason={setModalCreditReason}
+                errorMessage={errorMessage}
+            />
 
             {/* Daily Limit Modal */}
-            {showLimitModal && (
-                <div data-testid="limit-modal">
-                    <h2>設定每日限制</h2>
-                    <label htmlFor="modal-limit-input">每日積分限制</label>
-                    <input
-                        id="modal-limit-input"
-                        data-testid="modal-limit-input"
-                        type="number"
-                        placeholder="Enter daily limit"
-                        value={modalLimitValue}
-                        onChange={(e) => setModalLimitValue(e.target.value)}
-                    />
-                    <button onClick={() => setShowLimitModal(false)}>取消</button>
-                    <button onClick={handleLimitModalSubmit}>儲存設定</button>
-                </div>
-            )}
+            <DailyLimitModal
+                isOpen={showLimitModal}
+                onClose={() => setShowLimitModal(false)}
+                onSubmit={handleLimitModalSubmit}
+                limitValue={modalLimitValue}
+                setLimitValue={setModalLimitValue}
+            />
         </div>
     )
 }
