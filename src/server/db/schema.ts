@@ -54,6 +54,12 @@ export const users = sqliteTable("users", {
         .$defaultFn(() => new Date())
         .$onUpdate(() => new Date())
         .notNull(),
+    // Plan 8: 點數系統欄位
+    credits: integer("credits").default(0).notNull(),
+    hasGoogleApiKey: integer("has_google_api_key", { mode: "boolean" }).default(false).notNull(),
+    dailyLimit: integer("daily_limit").default(100).notNull(),
+    signupBonusClaimed: integer("signup_bonus_claimed", { mode: "boolean" }).default(false).notNull(),
+    role: text("role", { enum: ["super_admin", "admin", "free_user"] }).default("free_user").notNull(),
 });
 
 export const accounts = sqliteTable("accounts", {
@@ -166,3 +172,50 @@ export const flowRunStepAssets = sqliteTable("flow_run_step_assets", {
 });
 
 export type FlowRunStepAsset = typeof flowRunStepAssets.$inferSelect;
+
+// Plan 8: 點數系統表格
+
+// 點數交易記錄
+export const creditTransactions = sqliteTable("credit_transactions", {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    amount: integer("amount").notNull(),
+    type: text("type", { 
+        enum: ["purchase", "signup_bonus", "invite_code", "consumption", "admin_adjustment"] 
+    }).notNull(),
+    description: text("description"),
+    metadata: text("metadata"), // JSON 字串
+    expiresAt: integer("expires_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+});
+
+// 每日使用追蹤
+export const dailyUsage = sqliteTable("daily_usage", {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    usageDate: text("usage_date").notNull(), // YYYY-MM-DD 格式
+    creditsConsumed: integer("credits_consumed").default(0).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+});
+
+// 邀請碼管理
+export const inviteCodes = sqliteTable("invite_codes", {
+    code: text("code").primaryKey(),
+    createdByAdminId: text("created_by_admin_id").notNull(),
+    creditsValue: integer("credits_value").notNull(),
+    creditsExpiresAt: integer("credits_expires_at", { mode: "timestamp" }),
+    usedByUserId: text("used_by_user_id"),
+    usedAt: integer("used_at", { mode: "timestamp" }),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+});
+
+export type CreditTransaction = typeof creditTransactions.$inferSelect;
+export type DailyUsage = typeof dailyUsage.$inferSelect;
+export type InviteCode = typeof inviteCodes.$inferSelect;
