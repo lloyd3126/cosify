@@ -35,9 +35,9 @@ export function GenerateInviteModal({
                 type="number"
                 placeholder="Enter credits value"
                 value={form.creditsValue}
-                onChange={(e) => onFormChange({ 
-                    ...form, 
-                    creditsValue: e.target.value 
+                onChange={(e) => onFormChange({
+                    ...form,
+                    creditsValue: e.target.value
                 })}
             />
             <label htmlFor="expires-at-input">有效期限</label>
@@ -46,9 +46,9 @@ export function GenerateInviteModal({
                 data-testid="expires-at-input"
                 type="date"
                 value={form.expiresAt}
-                onChange={(e) => onFormChange({ 
-                    ...form, 
-                    expiresAt: e.target.value 
+                onChange={(e) => onFormChange({
+                    ...form,
+                    expiresAt: e.target.value
                 })}
             />
             <button onClick={onClose}>取消</button>

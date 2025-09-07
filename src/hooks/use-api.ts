@@ -29,7 +29,7 @@ export const getErrorMessage = (error: any): string => {
 // 通用的 API hook
 export function useApi<T>(url: string | null) {
     const { data, error, isLoading, mutate } = useSWR<T>(url, fetcher)
-    
+
     return {
         data,
         error: error ? getErrorMessage(error) : null,

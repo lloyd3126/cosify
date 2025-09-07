@@ -141,7 +141,7 @@ export function useInviteCodesManagement() {
         totalPages: data?.pagination?.totalPages || 1,
         isLoading,
         error,
-        
+
         // 狀態
         page,
         statusFilter,
@@ -151,7 +151,7 @@ export function useInviteCodesManagement() {
         generateForm,
         successMessage,
         errorMessage,
-        
+
         // 狀態更新
         setPage,
         setStatusFilter,
@@ -159,16 +159,16 @@ export function useInviteCodesManagement() {
         setShowDeleteModal,
         setGenerateForm,
         clearMessages,
-        
+
         // 操作
         handleGenerateSubmit,
         handleDeleteConfirm,
         handleDeleteRequest,
-        
+
         // 工具函數
         getStatusDisplayName,
         formatDate,
-        
+
         // SWR
         mutate
     }

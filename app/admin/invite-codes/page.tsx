@@ -16,7 +16,7 @@ export default function InviteCodesManagementPage() {
         totalPages,
         isLoading,
         error,
-        
+
         // 狀態
         page,
         statusFilter,
@@ -26,23 +26,23 @@ export default function InviteCodesManagementPage() {
         generateForm,
         successMessage,
         errorMessage,
-        
+
         // 狀態更新
         setPage,
         setStatusFilter,
         setShowGenerateModal,
         setShowDeleteModal,
         setGenerateForm,
-        
+
         // 操作
         handleGenerateSubmit,
         handleDeleteConfirm,
         handleDeleteRequest,
-        
+
         // 工具函數
         getStatusDisplayName,
         formatDate,
-        
+
         // SWR
         mutate
     } = useInviteCodesManagement()
@@ -52,17 +52,17 @@ export default function InviteCodesManagementPage() {
         return (
             <div data-testid="invite-codes-management-page">
                 <h1>邀請碼管理</h1>
-                <StatusFilter 
+                <StatusFilter
                     statusFilter=""
-                    onStatusChange={() => {}}
+                    onStatusChange={() => { }}
                 />
                 <div data-testid="invite-codes-table" />
                 <Pagination
                     currentPage={1}
                     totalPages={1}
-                    onPageChange={() => {}}
+                    onPageChange={() => { }}
                 />
-                <ErrorDisplay 
+                <ErrorDisplay
                     message={error}
                     onRetry={() => mutate()}
                 />
@@ -75,11 +75,11 @@ export default function InviteCodesManagementPage() {
             <h1>邀請碼管理</h1>
 
             {/* Header with Generate Button */}
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                marginBottom: '20px' 
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
             }}>
                 <div></div>
                 <button onClick={() => setShowGenerateModal(true)}>
@@ -88,7 +88,7 @@ export default function InviteCodesManagementPage() {
             </div>
 
             {/* Status Filters */}
-            <StatusFilter 
+            <StatusFilter
                 statusFilter={statusFilter}
                 onStatusChange={setStatusFilter}
             />

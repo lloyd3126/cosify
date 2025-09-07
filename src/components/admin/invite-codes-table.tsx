@@ -8,11 +8,11 @@ interface InviteCodesTableProps {
     formatDate: (dateString: string) => string
 }
 
-export function InviteCodesTable({ 
-    inviteCodes, 
-    onDeleteRequest, 
-    getStatusDisplayName, 
-    formatDate 
+export function InviteCodesTable({
+    inviteCodes,
+    onDeleteRequest,
+    getStatusDisplayName,
+    formatDate
 }: InviteCodesTableProps) {
     return (
         <div data-testid="invite-codes-table">
