@@ -8,19 +8,19 @@ interface ModalProps {
     footer?: React.ReactNode
 }
 
-export const Modal: React.FC<ModalProps> = ({ 
-    isOpen, 
-    onClose, 
-    title, 
-    children, 
-    footer 
+export const Modal: React.FC<ModalProps> = ({
+    isOpen,
+    onClose,
+    title,
+    children,
+    footer
 }) => {
     if (!isOpen) return null
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div 
-                className="modal-content" 
+            <div
+                className="modal-content"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
@@ -28,8 +28,8 @@ export const Modal: React.FC<ModalProps> = ({
             >
                 <div className="modal-header">
                     <h2 id="modal-title">{title}</h2>
-                    <button 
-                        className="modal-close" 
+                    <button
+                        className="modal-close"
                         onClick={onClose}
                         aria-label="關閉對話框"
                     >

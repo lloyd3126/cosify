@@ -21,7 +21,7 @@ const getErrorMessage = (error: any): string => {
     }
 
     // API 伺服器錯誤 (5xx)
-    if (error.message.includes('status: 500') || 
+    if (error.message.includes('status: 500') ||
         error.message.includes('status: 502') ||
         error.message.includes('status: 503') ||
         error.message.includes('status: 504')) {
@@ -47,16 +47,16 @@ const validateCreditAmount = (amount: string): { isValid: boolean; errorMessage:
     if (!amount.trim()) {
         return { isValid: false, errorMessage: '請輸入調整數量' }
     }
-    
+
     const numAmount = parseInt(amount)
     if (isNaN(numAmount)) {
         return { isValid: false, errorMessage: '請輸入有效的數字' }
     }
-    
+
     if (numAmount < -100000 || numAmount > 100000) {
         return { isValid: false, errorMessage: '調整數量不能超過限制' }
     }
-    
+
     return { isValid: true, errorMessage: '' }
 }
 
@@ -64,12 +64,12 @@ const validateDailyLimit = (limit: string): { isValid: boolean; errorMessage: st
     if (!limit.trim()) {
         return { isValid: false, errorMessage: '請輸入每日限制' }
     }
-    
+
     const numLimit = parseInt(limit)
     if (isNaN(numLimit) || numLimit < 0) {
         return { isValid: false, errorMessage: '請輸入有效的正數' }
     }
-    
+
     return { isValid: true, errorMessage: '' }
 }
 
