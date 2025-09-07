@@ -216,6 +216,35 @@ export const inviteCodes = sqliteTable("invite_codes", {
         .notNull(),
 });
 
+// 邀請碼兌換記錄
+export const inviteCodeRedemptions = sqliteTable("invite_code_redemptions", {
+    id: text("id").primaryKey(),
+    code: text("code").notNull(),
+    userId: text("user_id").notNull(),
+    creditsAwarded: integer("credits_awarded").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+});
+
+// 審計追蹤
+export const auditTrail = sqliteTable("audit_trail", {
+    id: text("id").primaryKey(),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    userId: text("user_id").notNull(),
+    oldData: text("old_data"), // JSON 字串
+    newData: text("new_data"), // JSON 字串
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .$defaultFn(() => new Date())
+        .notNull(),
+});
+
 export type CreditTransaction = typeof creditTransactions.$inferSelect;
 export type DailyUsage = typeof dailyUsage.$inferSelect;
 export type InviteCode = typeof inviteCodes.$inferSelect;
+export type InviteCodeRedemption = typeof inviteCodeRedemptions.$inferSelect;
+export type AuditTrail = typeof auditTrail.$inferSelect;
