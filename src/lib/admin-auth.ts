@@ -2,9 +2,9 @@
 import { NextRequest } from 'next/server';
 
 export interface AdminAuthResult {
-  success: boolean;
-  error?: string;
-  status?: number;
+    success: boolean;
+    error?: string;
+    status?: number;
 }
 
 /**
@@ -12,19 +12,19 @@ export interface AdminAuthResult {
  * 🔵 Refactor: 提取重複的權限檢查邏輯
  */
 export function checkAdminAuth(request: NextRequest): AdminAuthResult {
-  const authHeader = request.headers.get('authorization');
-  
-  if (!authHeader || !authHeader.includes('Bearer')) {
-    return {
-      success: false,
-      error: 'UNAUTHORIZED',
-      status: 401
-    };
-  }
-  
-  // 🔵 Refactor: 未來可以擴展為真實的 JWT 驗證
-  // 目前使用簡單的 Bearer token 檢查
-  return { success: true };
+    const authHeader = request.headers.get('authorization');
+
+    if (!authHeader || !authHeader.includes('Bearer')) {
+        return {
+            success: false,
+            error: 'UNAUTHORIZED',
+            status: 401
+        };
+    }
+
+    // 🔵 Refactor: 未來可以擴展為真實的 JWT 驗證
+    // 目前使用簡單的 Bearer token 檢查
+    return { success: true };
 }
 
 /**
@@ -32,10 +32,10 @@ export function checkAdminAuth(request: NextRequest): AdminAuthResult {
  * 🔵 Refactor: 標準化錯誤處理
  */
 export function createErrorResponse(error: string, status: number) {
-  return Response.json(
-    { success: false, error },
-    { status }
-  );
+    return Response.json(
+        { success: false, error },
+        { status }
+    );
 }
 
 /**
@@ -43,8 +43,8 @@ export function createErrorResponse(error: string, status: number) {
  * 🔵 Refactor: 標準化成功響應
  */
 export function createSuccessResponse(data: any) {
-  return Response.json({
-    success: true,
-    ...data
-  });
+    return Response.json({
+        success: true,
+        ...data
+    });
 }
