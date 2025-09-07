@@ -1,6 +1,88 @@
 // Import testing-library jest-dom custom matchers
 import '@testing-library/jest-dom'
 
+// Polyfills for MSW and Node.js environment
+import { TextEncoder, TextDecoder } from 'util'
+global.TextEncoder = TextEncoder
+global.TextDecoder = TextDecoder
+
+// Mock BroadcastChannel for MSW WebSocket support
+global.BroadcastChannel = class MockBroadcastChannel {
+    constructor(name) {
+        this.name = name
+    }
+    postMessage() { }
+    close() { }
+}
+
+// Mock TransformStream for MSW compatibility
+global.TransformStream = class MockTransformStream {
+    constructor() {
+        this.readable = new ReadableStream()
+        this.writable = new WritableStream()
+    }
+}
+
+// Mock Request for MSW
+global.Request = class MockRequest {
+    constructor(url, init = {}) {
+        this.url = url
+        this.method = init.method || 'GET'
+        this.headers = new Map(Object.entries(init.headers || {}))
+        this.body = init.body || null
+        this.cache = init.cache || 'default'
+        this.credentials = init.credentials || 'same-origin'
+        this.destination = init.destination || ''
+        this.integrity = init.integrity || ''
+        this.keepalive = init.keepalive || false
+        this.mode = init.mode || 'cors'
+        this.redirect = init.redirect || 'follow'
+        this.referrer = init.referrer || 'about:client'
+        this.referrerPolicy = init.referrerPolicy || ''
+        this.signal = init.signal || null
+    }
+
+    clone() {
+        return new MockRequest(this.url, this)
+    }
+
+    async json() {
+        return typeof this.body === 'string' ? JSON.parse(this.body) : this.body
+    }
+
+    async text() {
+        return typeof this.body === 'string' ? this.body : JSON.stringify(this.body)
+    }
+}
+
+// Mock ReadableStream and WritableStream if they don't exist
+if (!global.ReadableStream) {
+    global.ReadableStream = class MockReadableStream {
+        constructor() { }
+        getReader() {
+            return {
+                read: () => Promise.resolve({ done: true, value: undefined }),
+                releaseLock: () => { },
+                cancel: () => Promise.resolve()
+            }
+        }
+    }
+}
+
+if (!global.WritableStream) {
+    global.WritableStream = class MockWritableStream {
+        constructor() { }
+        getWriter() {
+            return {
+                write: () => Promise.resolve(),
+                close: () => Promise.resolve(),
+                abort: () => Promise.resolve(),
+                releaseLock: () => { }
+            }
+        }
+    }
+}
+
 // Mock global Response for API tests
 global.Response = global.Response || class MockResponse {
     constructor(body, init = {}) {
@@ -9,6 +91,14 @@ global.Response = global.Response || class MockResponse {
         this.statusText = init.statusText || 'OK'
         this.headers = new Map(Object.entries(init.headers || {}))
         this.ok = this.status >= 200 && this.status < 300
+    }
+
+    clone() {
+        return new MockResponse(this.body, {
+            status: this.status,
+            statusText: this.statusText,
+            headers: Object.fromEntries(this.headers)
+        })
     }
 
     async json() {
