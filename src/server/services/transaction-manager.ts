@@ -90,6 +90,8 @@ export interface Transaction {
     isActive(): boolean;
     /** 獲取交易統計 */
     getStats(): TransactionStats;
+    /** 增加死鎖重試計數（供 TransactionManager 使用） */
+    incrementDeadlockRetries(): void;
 }
 
 /**
@@ -218,6 +220,13 @@ class TransactionImpl implements Transaction {
     }
 
     /**
+     * 增加死鎖重試計數（供 TransactionManager 使用）
+     */
+    incrementDeadlockRetries(): void {
+        this.stats.deadlockRetries++;
+    }
+
+    /**
      * 處理超時
      */
     private async handleTimeout(): Promise<void> {
@@ -264,6 +273,16 @@ class TransactionImpl implements Transaction {
 
 /**
  * 交易管理器實現類
+ * 
+ * 提供企業級數據庫交易管理功能，包括：
+ * - 交易生命週期管理 (begin/commit/rollback)
+ * - 自動錯誤處理和回滾
+ * - 嵌套交易支持（使用保存點）
+ * - 交易隔離級別控制
+ * - 死鎖檢測和自動重試機制
+ * - 並發交易處理和池管理
+ * - 交易超時管理
+ * - 統計和監控功能
  */
 export class TransactionManagerImpl implements TransactionManager {
     private currentTransaction: Transaction | null = null;
@@ -272,12 +291,15 @@ export class TransactionManagerImpl implements TransactionManager {
     private readonly maxPoolSize: number;
     private readonly defaultIsolationLevel: IsolationLevel;
     private readonly defaultTimeout: number;
+    private readonly waitingQueue: Array<() => void> = [];
+    private availableSlots: number; // 添加可用槽位計數器
 
     constructor(
         private db: any,
         options: TransactionManagerOptions = {}
     ) {
         this.maxPoolSize = options.maxConcurrentTransactions || 10;
+        this.availableSlots = this.maxPoolSize; // 初始化可用槽位
         this.defaultIsolationLevel = options.defaultIsolationLevel || IsolationLevel.READ_COMMITTED;
         this.defaultTimeout = options.defaultTimeout || 30000; // 30 秒
     }
@@ -293,9 +315,45 @@ export class TransactionManagerImpl implements TransactionManager {
      * 開始新交易
      */
     async beginTransaction(options: TransactionOptions = {}): Promise<Transaction> {
-        // 檢查交易池大小
+        // 直接創建交易，不再在這裡做池管理（池管理移到 withTransaction）
+        return this.createTransaction(options);
+    }
+
+    /**
+     * 獲取交易槽位
+     */
+    private async acquireSlot(): Promise<void> {
+        if (this.availableSlots > 0) {
+            this.availableSlots--; // 減少可用槽位
+            return; // 立即獲得槽位
+        }
+
+        // 等待槽位可用
+        return new Promise<void>((resolve) => {
+            this.waitingQueue.push(resolve);
+        });
+    }
+
+    /**
+     * 釋放交易槽位
+     */
+    private releaseSlot(): void {
+        this.availableSlots++; // 增加可用槽位
+
+        if (this.waitingQueue.length > 0 && this.availableSlots > 0) {
+            const nextWaiter = this.waitingQueue.shift();
+            if (nextWaiter) {
+                this.availableSlots--; // 為下一個等待者預留槽位
+                nextWaiter(); // 喚醒下一個等待者
+            }
+        }
+    }    /**
+     * 創建實際的交易實例
+     */
+    private async createTransaction(options: TransactionOptions): Promise<Transaction> {
+        // 防禦性檢查：確保不會超過池大小
         if (this.activeTransactions.size >= this.maxPoolSize) {
-            throw new Error('Transaction pool is full. Maximum pool size exceeded.');
+            throw new Error('Transaction pool is full');
         }
 
         const id = this.generateTransactionId();
@@ -373,7 +431,8 @@ export class TransactionManagerImpl implements TransactionManager {
             get isolationLevel() { return transaction.isolationLevel; },
             get createdAt() { return transaction.createdAt; },
             isActive: () => transaction.isActive(),
-            getStats: () => transaction.getStats()
+            getStats: () => transaction.getStats(),
+            incrementDeadlockRetries: () => transaction.incrementDeadlockRetries()
         };
 
         return wrapper as Transaction;
@@ -414,85 +473,71 @@ export class TransactionManagerImpl implements TransactionManager {
         callback: (tx: Transaction) => Promise<T>,
         options: TransactionOptions = {}
     ): Promise<T> {
-        const maxRetries = options.retryAttempts || 3;
-        let lastError: Error;
+        // 獲取槽位（信號量控制在 withTransaction 級別）
+        await this.acquireSlot();
 
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const transaction = await this.beginTransaction(options);
+        try {
+            const maxRetries = options.retryAttempts || 3;
+            let lastError: Error;
+            let totalDeadlockRetries = 0; // 追蹤總死鎖重試次數
 
-            try {
-                // 如果設置了超時，為 withTransaction 設置一個獨立的超時檢查
-                if (options.timeout) {
-                    const timeoutPromise = new Promise<never>((_, reject) => {
-                        setTimeout(() => reject(new Error('Transaction timeout')), options.timeout);
-                    });
-
-                    const result = await Promise.race([
-                        callback(transaction),
-                        timeoutPromise
-                    ]);
-
-                    await transaction.commit();
-
-                    // 清理
-                    this.activeTransactions.delete(transaction.id);
-                    const stats = this.statistics.get(transaction.id);
-                    if (stats) {
-                        stats.endTime = Date.now();
-                        stats.status = TransactionStatus.COMMITTED;
-                    }
-
-                    return result;
-                } else {
-                    const result = await callback(transaction);
-                    await transaction.commit();
-
-                    // 清理
-                    this.activeTransactions.delete(transaction.id);
-                    const stats = this.statistics.get(transaction.id);
-                    if (stats) {
-                        stats.endTime = Date.now();
-                        stats.status = TransactionStatus.COMMITTED;
-                    }
-
-                    return result;
-                }
-            } catch (error) {
-                lastError = error as Error;
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                const transaction = await this.beginTransaction(options);
 
                 try {
-                    await transaction.rollback();
-                } catch (rollbackError) {
-                    // 忽略回滾錯誤
-                }
-
-                // 清理
-                this.activeTransactions.delete(transaction.id);
-                const stats = this.statistics.get(transaction.id);
-                if (stats) {
-                    stats.endTime = Date.now();
-                    stats.status = TransactionStatus.ROLLED_BACK;
-                    stats.rollbackReason = lastError.message;
-                }
-
-                // 檢查是否為死鎖錯誤且應該重試
-                if (this.isDeadlockError(lastError) && attempt < maxRetries) {
-                    if (stats) {
-                        stats.deadlockRetries++;
+                    // 如果不是第一次嘗試，將累積的死鎖重試次數設置到當前交易
+                    if (totalDeadlockRetries > 0) {
+                        // 設置累積的死鎖重試統計到當前交易
+                        for (let i = 0; i < totalDeadlockRetries; i++) {
+                            transaction.incrementDeadlockRetries();
+                        }
                     }
-                    // 也更新交易本身的統計
-                    const transactionStats = transaction.getStats();
-                    transactionStats.deadlockRetries++;
 
-                    await this.delay(100 * Math.pow(2, attempt)); // 指數退避
-                    continue;
+                    // 如果設置了超時，為 withTransaction 設置一個獨立的超時檢查
+                    if (options.timeout) {
+                        const timeoutPromise = new Promise<never>((_, reject) => {
+                            setTimeout(() => reject(new Error('Transaction timeout')), options.timeout);
+                        });
+
+                        const result = await Promise.race([
+                            callback(transaction),
+                            timeoutPromise
+                        ]);
+
+                        await transaction.commit();
+                        return result;
+                    } else {
+                        const result = await callback(transaction);
+                        await transaction.commit();
+                        return result;
+                    }
+                } catch (error) {
+                    lastError = error as Error;
+
+                    try {
+                        await transaction.rollback();
+                    } catch (rollbackError) {
+                        // 忽略回滾錯誤
+                    }
+
+                    // 檢查是否為死鎖錯誤且應該重試
+                    if (this.isDeadlockError(lastError) && attempt < maxRetries) {
+                        totalDeadlockRetries++; // 增加總死鎖重試計數
+                        // 更新統計將由 rollback 的包裝器處理
+
+                        await this.delay(100 * Math.pow(2, attempt)); // 指數退避
+                        continue;
+                    }
+
+                    break; // 不是死鎖錯誤或達到最大重試次數
                 }
-
-                break; // 不是死鎖錯誤或達到最大重試次數
             }
-        }
 
-        throw lastError!;
+            throw lastError!;
+        } finally {
+            // 確保在任何情況下都釋放槽位
+            this.releaseSlot();
+        }
     }
 
     /**
@@ -514,6 +559,13 @@ export class TransactionManagerImpl implements TransactionManager {
      */
     getPoolSize(): number {
         return this.activeTransactions.size;
+    }
+
+    /**
+     * 獲取可用槽位數（用於調試）
+     */
+    getAvailableSlots(): number {
+        return this.availableSlots;
     }
 
     /**
