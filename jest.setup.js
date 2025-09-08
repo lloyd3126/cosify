@@ -1,3 +1,14 @@
+// 🛡️ 測試安全檢查 - 確保不會意外使用正式資料庫
+process.env.NODE_ENV = 'test'
+
+// 🚨 重要：禁止在測試中使用正式資料庫
+if (process.env.DATABASE_URL?.includes('app.sqlite')) {
+    throw new Error('🚨 SECURITY: 禁止在測試中使用正式資料庫！')
+}
+
+// 設定測試專用的資料庫路徑
+process.env.DATABASE_URL = 'file:./.data/test.sqlite'
+
 // Import testing-library jest-dom custom matchers
 import '@testing-library/jest-dom'
 
@@ -173,3 +184,30 @@ global.console = {
     warn: jest.fn(),
     error: jest.fn(),
 }
+
+// 設定全域測試超時
+jest.setTimeout(30000)
+
+// 全域測試清理
+beforeEach(() => {
+    // 清理控制台警告（除非是測試本身的輸出）
+    if (!process.env.VERBOSE_TESTS) {
+        jest.spyOn(console, 'warn').mockImplementation(() => { })
+    }
+})
+
+afterEach(() => {
+    // 恢復 mock
+    jest.restoreAllMocks()
+})
+
+// 測試結束後清理
+afterAll(async () => {
+    // 清理過期的測試資料庫
+    try {
+        const { cleanupOldTestDatabases } = require('./__tests__/helpers/test-database')
+        cleanupOldTestDatabases()
+    } catch (error) {
+        // 忽略清理錯誤
+    }
+})

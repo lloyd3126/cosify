@@ -17,21 +17,40 @@ describe('Database Schema Validation', () => {
     let sqliteDb: Database.Database
 
     beforeAll(async () => {
-        // Connect to actual database instead of in-memory
-        sqliteDb = new Database('.data/app.sqlite')
+        // 🛡️ 使用測試專用的資料庫，避免污染正式資料
+        const testDbPath = '.data/test.sqlite'
+
+        // 刪除舊的測試資料庫（如果存在）
+        try {
+            require('fs').unlinkSync(testDbPath)
+        } catch (error) {
+            // 文件不存在時忽略錯誤
+        }
+
+        sqliteDb = new Database(testDbPath)
         db = drizzle(sqliteDb, { schema })
 
-        // Clean any existing test data to avoid conflicts
+        // 執行遷移來建立測試資料庫結構
+        migrate(db, { migrationsFolder: './drizzle' })
+
+        // 清理任何殘留的測試資料（雖然使用新資料庫應該不需要）
         try {
             await db.delete(schema.users).where(eq(schema.users.email, 'test@example.com'))
             await db.delete(schema.users).where(eq(schema.users.email, 'admin@test.com'))
         } catch (error) {
-            // Ignore cleanup errors
+            // 忽略清理錯誤，因為表格可能還不存在
         }
     })
 
     afterAll(() => {
         sqliteDb.close()
+
+        // 🧹 測試結束後清理測試資料庫
+        try {
+            require('fs').unlinkSync('.data/test.sqlite')
+        } catch (error) {
+            // 忽略清理錯誤
+        }
     })
 
     describe('Core Authentication Tables', () => {
