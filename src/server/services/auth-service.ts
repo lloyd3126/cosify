@@ -103,27 +103,27 @@ export const AUTH_CONFIG = {
     'premium_user': 2,
     'admin': 3
   },
-  
+
   // Permission definitions - organized by category
   PERMISSIONS: {
     // Credit operations
     CONSUME_CREDITS: 'CONSUME_CREDITS',
     MANAGE_CREDITS: 'MANAGE_CREDITS',
-    
+
     // User management
     MANAGE_USERS: 'MANAGE_USERS',
     VIEW_USER_DATA: 'VIEW_USER_DATA',
-    
+
     // Analytics and reporting
     VIEW_ANALYTICS: 'VIEW_ANALYTICS',
     EXPORT_DATA: 'EXPORT_DATA',
-    
+
     // System administration
     CREATE_INVITE_CODES: 'CREATE_INVITE_CODES',
     MANAGE_SYSTEM: 'MANAGE_SYSTEM',
     AUDIT_LOGS: 'AUDIT_LOGS'
   },
-  
+
   // Enhanced role-based permissions mapping
   ROLE_PERMISSIONS: {
     'free_user': ['CONSUME_CREDITS'],
@@ -133,7 +133,7 @@ export const AUTH_CONFIG = {
       'VIEW_ANALYTICS', 'EXPORT_DATA', 'CREATE_INVITE_CODES', 'MANAGE_SYSTEM', 'AUDIT_LOGS'
     ]
   },
-  
+
   // Security settings
   SECURITY: {
     TOKEN_EXPIRY_HOURS: 24,
@@ -145,7 +145,7 @@ export const AUTH_CONFIG = {
     MIN_SESSION_ID_LENGTH: 32,
     MIN_TOKEN_LENGTH: 64
   },
-  
+
   // Cache settings
   CACHE: {
     PERMISSION_TTL_SECONDS: 300, // 5 minutes
@@ -160,23 +160,24 @@ export const AUTH_ERROR_CODES = {
   USER_NOT_FOUND: 'USER_NOT_FOUND',
   USER_LOCKED: 'USER_LOCKED',
   USER_INACTIVE: 'USER_INACTIVE',
-  
+
   // Permission errors
   INSUFFICIENT_ROLE: 'INSUFFICIENT_ROLE',
   INVALID_PERMISSION: 'INVALID_PERMISSION',
   ADMIN_REQUIRED: 'ADMIN_REQUIRED',
   INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
-  
+
   // Authentication errors
   INVALID_TOKEN: 'INVALID_TOKEN',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_BLACKLISTED: 'TOKEN_BLACKLISTED',
   SESSION_EXPIRED: 'SESSION_EXPIRED',
   SESSION_INACTIVE: 'SESSION_INACTIVE',
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   INVALID_SESSION: 'INVALID_SESSION',
   INVALID_TOKEN_FORMAT: 'INVALID_TOKEN_FORMAT',
   SECURITY_VIOLATION: 'SECURITY_VIOLATION',
-  
+
   // System errors
   INVALID_ROLE: 'INVALID_ROLE',
   DATABASE_ERROR: 'DATABASE_ERROR',
@@ -190,8 +191,8 @@ class SecurityUtils {
    * Generate secure session ID
    */
   static generateSessionId(): string {
-    return Math.random().toString(36).substring(2, 15) + 
-           Math.random().toString(36).substring(2, 15)
+    return Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15)
   }
 
   /**
@@ -232,24 +233,24 @@ class PermissionCache {
 
   static set(key: string, data: any, ttlSeconds: number): void {
     const expiry = Date.now() + (ttlSeconds * 1000)
-    
+
     // Prevent cache from growing too large
     if (this.cache.size >= AUTH_CONFIG.CACHE.MAX_CACHE_ENTRIES) {
       this.cleanup()
     }
-    
+
     this.cache.set(key, { data, expiry })
   }
 
   static get(key: string): any | null {
     const entry = this.cache.get(key)
     if (!entry) return null
-    
+
     if (Date.now() > entry.expiry) {
       this.cache.delete(key)
       return null
     }
-    
+
     return entry.data
   }
 
@@ -308,7 +309,7 @@ export class AuthService {
       // Check cache first for performance
       const cacheKey = PermissionCache.generateCacheKey(userId, 'validateRole', { requiredRole })
       const cachedResult = PermissionCache.get(cacheKey)
-      
+
       if (cachedResult) {
         return { ...cachedResult, cached: true }
       }
@@ -359,7 +360,7 @@ export class AuthService {
       // Check cache first for performance
       const cacheKey = PermissionCache.generateCacheKey(userId, 'checkPermission', { permission })
       const cachedResult = PermissionCache.get(cacheKey)
-      
+
       if (cachedResult) {
         return { ...cachedResult, cached: true }
       }
@@ -520,12 +521,12 @@ export class AuthService {
 
         // Check all required permissions
         const permissionChecks = await Promise.all(
-          requiredPermissions.map(permission => 
+          requiredPermissions.map(permission =>
             this.checkPermission(user.id, permission)
           )
         )
 
-        const hasAllPermissions = permissionChecks.every(check => 
+        const hasAllPermissions = permissionChecks.every(check =>
           check.success && check.hasPermission
         )
 
@@ -731,7 +732,7 @@ export class AuthService {
       if (session.expiresAt && session.expiresAt < now) {
         // Clean up expired session
         await this.cleanupExpiredSession(sessionId)
-        
+
         return {
           success: false,
           sessionValid: false,
@@ -869,7 +870,7 @@ export class AuthService {
 
     // In real implementation, would query sessions table
     // return await this.db.select().from(sessions).where(eq(sessions.id, sessionId)).get()
-    
+
     // For testing, return mock data
     return this.db.mockData?.sessions?.find((s: any) => s.id === sessionId)
   }
@@ -999,12 +1000,39 @@ export class AuthService {
   private checkRoleHierarchy(userRole: string, requiredRole: string): boolean {
     const userLevel = AUTH_CONFIG.ROLE_HIERARCHY[userRole as keyof typeof AUTH_CONFIG.ROLE_HIERARCHY] || 0
     const requiredLevel = AUTH_CONFIG.ROLE_HIERARCHY[requiredRole as keyof typeof AUTH_CONFIG.ROLE_HIERARCHY] || 0
-    
+
     return userLevel >= requiredLevel
   }
 
   /**
    * Check if permission is valid
+   */
+  private async findUser(userId: string): Promise<any> {
+    if (this.db.mockData) {
+      return this.db.mockData.users.find((u: any) => u.id === userId)
+    }
+
+    // Real database query using dynamic import for schema
+    try {
+      // Import schema dynamically to avoid circular dependencies
+      const schema = await import('../db/schema')
+      const { eq } = await import('drizzle-orm')
+
+      const result = this.db.select()
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .limit(1)
+        .all()
+
+      return result[0] || null
+    } catch (error) {
+      console.warn('Database query failed:', error)
+      return null
+    }
+  }
+
+  /**
+   * Validate if permission is valid
    */
   private isValidPermission(permission: string): boolean {
     return Object.values(AUTH_CONFIG.PERMISSIONS).includes(permission as any)
@@ -1138,7 +1166,7 @@ export class AuthService {
    */
   private checkPermissionMock(userId: string, permission: string): PermissionCheckResult {
     const mockData = this.db.mockData
-    
+
     if (!this.isValidPermission(permission)) {
       return {
         success: false,
@@ -1204,7 +1232,7 @@ export class AuthService {
    */
   private updateUserRoleMock(userId: string, newRole: string, adminUserId: string): RoleUpdateResult {
     const mockData = this.db.mockData
-    
+
     // Verify admin privileges
     const adminUser = mockData.users.find((u: any) => u.id === adminUserId)
     if (!adminUser || adminUser.role !== 'admin') {
