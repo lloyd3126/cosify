@@ -267,9 +267,10 @@ describe('🔐 Phase 2.10 - Data Encryption Storage', () => {
             const plaintext = 'test data'
             const encrypted = await dataEncryptor.encrypt(plaintext)
 
-            // 篡改密文
-            const tamperedCiphertext = encrypted.ciphertext + 'tampered'
-            const tamperedData = { ...encrypted, ciphertext: tamperedCiphertext }
+            // 篡改認證標籤（更有效的篡改檢測）
+            const originalTag = encrypted.tag
+            const tamperedTag = originalTag.slice(0, -2) + '00' // 改變最後一個 byte
+            const tamperedData = { ...encrypted, tag: tamperedTag }
 
             const result = await dataEncryptor.decrypt(tamperedData)
             expect(result.success).toBe(false)

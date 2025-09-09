@@ -145,9 +145,10 @@ export class DataEncryptor {
             // 處理特殊值 - 使用正常加密流程處理
             // if (data === null || data === undefined || data === '') {
             //     return this.encryptSpecialValue(data, options)
-            // }            // 轉換為字串，確保不是 undefined
+            // }            // 轉換為字串，JSON.stringify 會處理所有值包括 null/undefined
             const plaintext = this.serializeData(data)
-            if (plaintext === undefined || plaintext === null) {
+            // JSON.stringify 永遠不會返回 undefined，只會返回字串
+            if (typeof plaintext !== 'string') {
                 throw new Error('Failed to serialize data')
             }
 
@@ -220,12 +221,22 @@ export class DataEncryptor {
 
             // 設定認證標籤
             try {
-                decipher.setAuthTag(Buffer.from(encryptedData.tag, 'hex'))
+                const tagBuffer = Buffer.from(encryptedData.tag, 'hex')
+                if (tagBuffer.length !== 16) { // GCM 標籤應該是 16 bytes
+                    throw new Error('Invalid authentication tag length')
+                }
+                decipher.setAuthTag(tagBuffer)
             } catch (error) {
                 throw new Error('Invalid authentication tag format')
-            }            // 解密資料
+            }
+
+            // 解密資料（如果認證失敗，decipher.final() 會拋出錯誤）
             let decrypted = decipher.update(encryptedData.ciphertext, 'hex', 'utf8')
-            decrypted += decipher.final('utf8')            // 反序列化資料
+            try {
+                decrypted += decipher.final('utf8')
+            } catch (error) {
+                throw new Error('Authentication verification failed')
+            }            // 反序列化資料
             const result = this.deserializeData(decrypted)
 
             this.logOperation('decrypt', undefined, true)
@@ -239,11 +250,10 @@ export class DataEncryptor {
             if (errorMessage.includes('bad decrypt') ||
                 errorMessage.includes('auth') ||
                 errorMessage.includes('Unsupported state') ||
-                errorMessage.includes('Invalid authentication tag')) {
+                errorMessage.includes('Invalid authentication tag') ||
+                errorMessage.includes('Authentication verification failed')) {
                 return { success: false, error: 'Invalid authentication tag' }
-            }
-
-            return { success: false, error: errorMessage }
+            } return { success: false, error: errorMessage }
         }
     }
 
@@ -545,17 +555,23 @@ export class DataEncryptor {
     }
 
     private serializeData(data: any): string {
-        if (typeof data === 'string') {
-            return data
+        // 對於所有資料類型都使用 JSON 序列化，確保型別資訊保留
+        // 注意：JSON.stringify(undefined) 會返回 undefined，需要特殊處理
+        const result = JSON.stringify(data)
+        return result !== undefined ? result : 'undefined'
+    }
+
+    private deserializeData(text: string): any {
+        // 特殊處理 undefined
+        if (text === 'undefined') {
+            return undefined
         }
-        // 所有非字串型別都序列化為 JSON
-        return JSON.stringify(data)
-    } private deserializeData(text: string): any {
+
         try {
-            const parsed = JSON.parse(text)
-            return parsed
+            // JSON 反序列化會保持原始資料型別
+            return JSON.parse(text)
         } catch {
-            // 不自動轉換為數字，保持原始字串格式
+            // 如果 JSON 解析失敗，返回原始文字
             return text
         }
     }
